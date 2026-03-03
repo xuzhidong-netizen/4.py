@@ -79,6 +79,7 @@
           </div>
 
           <div class="top-actions">
+            <button class="ghost-btn" id="collab-btn">协同设置</button>
             <button class="ghost-btn" id="connect-btn">连接仓库</button>
             <button class="ghost-btn" id="share-btn">分享</button>
             <button class="primary-btn" id="export-btn">导出</button>
@@ -169,6 +170,15 @@
             <div class="panel-head">
               <p class="eyebrow">协作动态</p>
             </div>
+            <div class="presence-panel">
+              <div class="presence-head">
+                <strong>在线成员</strong>
+                <span class="presence-state" id="presence-state">未开启实时协同</span>
+              </div>
+              <div class="presence-list" id="presence-list">
+                <span class="presence-empty">仅本地编辑</span>
+              </div>
+            </div>
             <div class="activity-list">
               <article>
                 <strong>徐志东</strong>
@@ -230,6 +240,38 @@
         <div class="dialog-actions">
           <button type="button" class="ghost-btn" id="close-config">取消</button>
           <button type="submit" class="primary-btn">保存并连接</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="config-dialog" id="collab-dialog">
+      <form class="config-form" id="collab-form" method="dialog">
+        <div>
+          <p class="eyebrow">实时协同</p>
+          <h2>配置轻量协同</h2>
+          <p class="config-copy">
+            GitHub 继续负责文档落盘，Supabase Realtime 负责多人在线同步与在线状态展示。
+          </p>
+        </div>
+
+        <label>
+          <span>Supabase URL</span>
+          <input id="collab-url" name="collab-url" type="url" placeholder="https://xxxx.supabase.co" required />
+        </label>
+
+        <label>
+          <span>Publishable Key</span>
+          <textarea id="collab-key" name="collab-key" rows="4" placeholder="sb_publishable_xxx / anon key" required></textarea>
+        </label>
+
+        <label>
+          <span>你的名字</span>
+          <input id="collab-name" name="collab-name" type="text" placeholder="徐志东" required />
+        </label>
+
+        <div class="dialog-actions">
+          <button type="button" class="ghost-btn" id="close-collab">取消</button>
+          <button type="submit" class="primary-btn">保存并加入</button>
         </div>
       </form>
     </dialog>

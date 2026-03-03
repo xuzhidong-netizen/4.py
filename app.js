@@ -8,10 +8,16 @@ const shareButton = document.querySelector("#share-btn");
 const exportButton = document.querySelector("#export-btn");
 const newDocButton = document.querySelector("#new-doc");
 const connectButton = document.querySelector("#connect-btn");
+const collabButton = document.querySelector("#collab-btn");
 const connectionState = document.querySelector("#connection-state");
 const configDialog = document.querySelector("#config-dialog");
 const configForm = document.querySelector("#config-form");
 const closeConfigButton = document.querySelector("#close-config");
+const collabDialog = document.querySelector("#collab-dialog");
+const collabForm = document.querySelector("#collab-form");
+const closeCollabButton = document.querySelector("#close-collab");
+const presenceList = document.querySelector("#presence-list");
+const presenceState = document.querySelector("#presence-state");
 const guideDialog = document.querySelector("#guide-dialog");
 const dismissGuideButton = document.querySelector("#dismiss-guide");
 const guideConnectButton = document.querySelector("#guide-connect");
@@ -20,11 +26,15 @@ const githubRepoInput = document.querySelector("#github-repo");
 const githubBranchInput = document.querySelector("#github-branch");
 const githubFolderInput = document.querySelector("#github-folder");
 const githubTokenInput = document.querySelector("#github-token");
+const collabUrlInput = document.querySelector("#collab-url");
+const collabKeyInput = document.querySelector("#collab-key");
+const collabNameInput = document.querySelector("#collab-name");
 const toolButtons = document.querySelectorAll(".tool-btn");
 const fontFamily = document.querySelector("#font-family");
 const fontSize = document.querySelector("#font-size");
 
 const STORAGE_KEY = "ienter-docs-github-config";
+const COLLAB_KEY = "ienter-docs-collab-config";
 const GUIDE_KEY = "ienter-docs-guide-dismissed";
 const DEFAULT_CONFIG = {
   owner: "xuzhidong-netizen",
@@ -33,15 +43,28 @@ const DEFAULT_CONFIG = {
   folder: "documents",
   token: "",
 };
+const DEFAULT_COLLAB_CONFIG = {
+  url: "",
+  key: "",
+  name: "",
+};
 
 let saveTimer = null;
+let broadcastTimer = null;
 let activeDocument = {
   path: null,
   sha: null,
   slug: "2026-market-plan",
 };
 let currentConfig = loadConfig();
+let collabConfig = loadCollabConfig();
 let docButtons = [...docItems];
+let supabaseClient = null;
+let collabChannel = null;
+let collabEnabled = false;
+let applyingRemote = false;
+let lastRemoteTimestamp = 0;
+const clientId = `client-${crypto.randomUUID()}`;
 
 function showToast(message) {
   toast.textContent = message;
@@ -73,6 +96,28 @@ function showConnectionState(text, status) {
   }
 }
 
+function setPresenceState(text) {
+  presenceState.textContent = text;
+}
+
+function renderPresence(peers = []) {
+  presenceList.innerHTML = "";
+  if (!peers.length) {
+    const empty = document.createElement("span");
+    empty.className = "presence-empty";
+    empty.textContent = "仅本地编辑";
+    presenceList.appendChild(empty);
+    return;
+  }
+
+  peers.forEach((peer) => {
+    const chip = document.createElement("span");
+    chip.className = "presence-chip";
+    chip.textContent = peer.name || "协作者";
+    presenceList.appendChild(chip);
+  });
+}
+
 function slugify(text) {
   return text
     .toLowerCase()
@@ -93,6 +138,20 @@ function loadConfig() {
 function persistConfig(config) {
   currentConfig = { ...DEFAULT_CONFIG, ...config };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+}
+
+function loadCollabConfig() {
+  try {
+    const raw = window.localStorage.getItem(COLLAB_KEY);
+    return raw ? { ...DEFAULT_COLLAB_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_COLLAB_CONFIG };
+  } catch {
+    return { ...DEFAULT_COLLAB_CONFIG };
+  }
+}
+
+function persistCollabConfig(config) {
+  collabConfig = { ...DEFAULT_COLLAB_CONFIG, ...config };
+  window.localStorage.setItem(COLLAB_KEY, JSON.stringify(collabConfig));
 }
 
 function shouldShowGuide() {
@@ -216,6 +275,143 @@ function setEditorContent(record) {
   };
   docTitle.value = record.title;
   editor.innerHTML = record.content;
+}
+
+async function ensureSupabaseClient() {
+  if (!collabConfig.url || !collabConfig.key) {
+    return null;
+  }
+
+  if (!supabaseClient) {
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+    supabaseClient = createClient(collabConfig.url, collabConfig.key);
+  }
+
+  return supabaseClient;
+}
+
+async function leaveCollabChannel() {
+  if (supabaseClient && collabChannel) {
+    await supabaseClient.removeChannel(collabChannel);
+  }
+
+  collabChannel = null;
+  collabEnabled = false;
+  renderPresence([]);
+}
+
+function handlePresenceSync() {
+  if (!collabChannel) {
+    renderPresence([]);
+    return;
+  }
+
+  const state = collabChannel.presenceState();
+  const peers = Object.values(state)
+    .flat()
+    .map((entry) => ({
+      name: entry.name,
+      clientId: entry.clientId,
+    }));
+
+  renderPresence(peers);
+  setPresenceState(peers.length ? `${peers.length} 人在线` : "仅本地编辑");
+}
+
+function applyRemoteUpdate(payload) {
+  if (payload.clientId === clientId) {
+    return;
+  }
+
+  if (payload.updatedAt <= lastRemoteTimestamp) {
+    return;
+  }
+
+  applyingRemote = true;
+  docTitle.value = payload.title;
+  editor.innerHTML = payload.content;
+  activeDocument.slug = payload.slug || activeDocument.slug;
+  applyingRemote = false;
+  lastRemoteTimestamp = payload.updatedAt;
+  setSaveState("已同步");
+  showToast(`${payload.author || "协作者"} 的修改已同步`);
+}
+
+async function joinCollabChannel() {
+  if (!collabConfig.url || !collabConfig.key || !collabConfig.name) {
+    setPresenceState("未开启实时协同");
+    renderPresence([]);
+    return;
+  }
+
+  const client = await ensureSupabaseClient();
+  if (!client) {
+    return;
+  }
+
+  await leaveCollabChannel();
+
+  const room = `doc-${activeDocument.slug || "draft"}`;
+  collabChannel = client
+    .channel(room, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: clientId },
+      },
+    })
+    .on("broadcast", { event: "doc:update" }, ({ payload }) => {
+      applyRemoteUpdate(payload);
+    })
+    .on("presence", { event: "sync" }, handlePresenceSync);
+
+  setPresenceState("连接协同中...");
+
+  await collabChannel.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      collabEnabled = true;
+      await collabChannel.track({
+        clientId,
+        name: collabConfig.name,
+        slug: activeDocument.slug,
+      });
+      handlePresenceSync();
+      setPresenceState("实时协同已连接");
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      collabEnabled = false;
+      setPresenceState("实时协同异常");
+    }
+  });
+}
+
+function scheduleBroadcast() {
+  if (!collabEnabled || applyingRemote || !collabChannel) {
+    return;
+  }
+
+  window.clearTimeout(broadcastTimer);
+  broadcastTimer = window.setTimeout(async () => {
+    const payload = {
+      clientId,
+      author: collabConfig.name || "协作者",
+      slug: activeDocument.slug,
+      title: docTitle.value.trim() || "未命名文档",
+      content: editor.innerHTML,
+      updatedAt: Date.now(),
+    };
+
+    lastRemoteTimestamp = payload.updatedAt;
+
+    try {
+      await collabChannel.send({
+        type: "broadcast",
+        event: "doc:update",
+        payload,
+      });
+    } catch (error) {
+      console.error(error);
+      setPresenceState("实时协同异常");
+    }
+  }, 250);
 }
 
 async function listDocumentFiles() {
@@ -367,6 +563,7 @@ function scheduleSave() {
   markSaving();
   window.clearTimeout(scheduleSave.timer);
   scheduleSave.timer = window.setTimeout(saveDocument, 800);
+  scheduleBroadcast();
 }
 
 async function handleDocumentSelection(button) {
@@ -379,6 +576,7 @@ async function handleDocumentSelection(button) {
       sha: button.dataset.sha || null,
       slug: button.dataset.slug || slugify(button.dataset.title),
     };
+    await joinCollabChannel();
     showToast(`已切换到《${button.dataset.title}》`);
     return;
   }
@@ -388,6 +586,7 @@ async function handleDocumentSelection(button) {
     const record = parseDocumentFile(data, decodeBase64Utf8(data.content));
     setEditorContent(record);
     updateDocumentButton(button, record);
+    await joinCollabChannel();
     showToast(`已切换到《${record.title}》`);
   } catch (error) {
     console.error(error);
@@ -395,8 +594,17 @@ async function handleDocumentSelection(button) {
   }
 }
 
-editor.addEventListener("input", scheduleSave);
+editor.addEventListener("input", () => {
+  if (applyingRemote) {
+    return;
+  }
+  scheduleSave();
+});
+
 docTitle.addEventListener("input", () => {
+  if (applyingRemote) {
+    return;
+  }
   if (!activeDocument.path) {
     activeDocument.slug = slugify(docTitle.value) || activeDocument.slug;
   }
@@ -450,7 +658,7 @@ exportButton.addEventListener("click", () => {
   showToast("已触发导出为 Word/PDF 的模拟流程");
 });
 
-newDocButton.addEventListener("click", () => {
+newDocButton.addEventListener("click", async () => {
   docTitle.value = "未命名文档";
   editor.innerHTML =
     "<h1>未命名文档</h1><p>在这里开始记录新的文档内容。保存后会写入 GitHub 仓库文件。</p>";
@@ -461,6 +669,7 @@ newDocButton.addEventListener("click", () => {
     slug: `doc-${Date.now()}`,
   };
   setSaveState(currentConfig.token ? "待保存" : "未连接");
+  await joinCollabChannel();
   showToast("已创建新的空白文档");
 });
 
@@ -473,8 +682,19 @@ connectButton.addEventListener("click", () => {
   configDialog.showModal();
 });
 
+collabButton.addEventListener("click", () => {
+  collabUrlInput.value = collabConfig.url;
+  collabKeyInput.value = collabConfig.key;
+  collabNameInput.value = collabConfig.name;
+  collabDialog.showModal();
+});
+
 closeConfigButton.addEventListener("click", () => {
   configDialog.close();
+});
+
+closeCollabButton.addEventListener("click", () => {
+  collabDialog.close();
 });
 
 dismissGuideButton.addEventListener("click", () => {
@@ -508,6 +728,7 @@ configForm.addEventListener("submit", async (event) => {
     await fetchDocuments();
     showConnectionState("GitHub 已连接", "connected");
     setSaveState("已保存");
+    await joinCollabChannel();
     showToast("仓库连接成功，文档会写入 GitHub 文件");
     configDialog.close();
   } catch (error) {
@@ -518,14 +739,37 @@ configForm.addEventListener("submit", async (event) => {
   }
 });
 
+collabForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  persistCollabConfig({
+    url: collabUrlInput.value.trim().replace(/\/$/, ""),
+    key: collabKeyInput.value.trim(),
+    name: collabNameInput.value.trim(),
+  });
+
+  try {
+    await joinCollabChannel();
+    collabDialog.close();
+    showToast("实时协同已启用");
+  } catch (error) {
+    console.error(error);
+    setPresenceState("实时协同异常");
+    showToast("实时协同连接失败，请检查 Supabase Realtime 配置");
+  }
+});
+
 async function boot() {
   if (shouldShowGuide()) {
     guideDialog.showModal();
   }
 
+  renderPresence([]);
+
   if (!currentConfig.token) {
     showConnectionState("未连接 GitHub", "");
     setSaveState("未连接");
+    setPresenceState(collabConfig.url ? "待连接文档" : "未开启实时协同");
     return;
   }
 
@@ -535,10 +779,12 @@ async function boot() {
     await fetchDocuments();
     showConnectionState("GitHub 已连接", "connected");
     setSaveState("已保存");
+    await joinCollabChannel();
   } catch (error) {
     console.error(error);
     showConnectionState("连接异常", "error");
     setSaveState("连接失败");
+    setPresenceState("实时协同未连接");
   }
 }
 
