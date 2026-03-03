@@ -234,6 +234,35 @@
       </form>
     </dialog>
 
+    <dialog class="guide-dialog" id="guide-dialog">
+      <div class="guide-card">
+        <div>
+          <p class="eyebrow">首次使用</p>
+          <h2>先连接 GitHub 仓库</h2>
+          <p class="config-copy">
+            这个编辑器会把每篇文档保存成仓库里的 `documents/*.json` 文件，所以第一次使用前需要先完成仓库授权。
+          </p>
+        </div>
+
+        <ol class="guide-list">
+          <li>点击右上角 `连接仓库`。</li>
+          <li>填写 `Owner / Repository / Branch / Folder`。</li>
+          <li>填写 GitHub fine-grained token，并确保有 `Contents: Read and write` 权限。</li>
+          <li>连接成功后，编辑内容会自动保存到仓库文件。</li>
+        </ol>
+
+        <div class="guide-note">
+          <strong>默认建议</strong>
+          <p>Owner 用 `xuzhidong-netizen`，Repository 用 `4.py`，Branch 用 `main`，Folder 用 `documents`。</p>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="ghost-btn" id="dismiss-guide">我知道了</button>
+          <button type="button" class="primary-btn" id="guide-connect">去连接仓库</button>
+        </div>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" aria-live="polite"></div>
     <script src="./app.js"></script>
   </body>

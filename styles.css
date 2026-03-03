@@ -464,12 +464,14 @@ button {
   background: transparent;
 }
 
-.config-dialog::backdrop {
+.config-dialog::backdrop,
+.guide-dialog::backdrop {
   background: rgba(15, 23, 42, 0.4);
   backdrop-filter: blur(6px);
 }
 
-.config-form {
+.config-form,
+.guide-card {
   display: grid;
   gap: 16px;
   padding: 24px;
@@ -481,6 +483,43 @@ button {
 
 .config-form h2 {
   margin: 0;
+}
+
+.guide-dialog {
+  width: min(640px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: 26px;
+  background: transparent;
+}
+
+.guide-card h2 {
+  margin: 0;
+}
+
+.guide-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.guide-note {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(36, 87, 245, 0.08);
+}
+
+.guide-note strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.guide-note p {
+  margin: 0;
+  color: var(--muted);
 }
 
 .config-form label {

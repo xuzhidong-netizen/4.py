@@ -12,6 +12,9 @@ const connectionState = document.querySelector("#connection-state");
 const configDialog = document.querySelector("#config-dialog");
 const configForm = document.querySelector("#config-form");
 const closeConfigButton = document.querySelector("#close-config");
+const guideDialog = document.querySelector("#guide-dialog");
+const dismissGuideButton = document.querySelector("#dismiss-guide");
+const guideConnectButton = document.querySelector("#guide-connect");
 const githubOwnerInput = document.querySelector("#github-owner");
 const githubRepoInput = document.querySelector("#github-repo");
 const githubBranchInput = document.querySelector("#github-branch");
@@ -22,6 +25,7 @@ const fontFamily = document.querySelector("#font-family");
 const fontSize = document.querySelector("#font-size");
 
 const STORAGE_KEY = "ienter-docs-github-config";
+const GUIDE_KEY = "ienter-docs-guide-dismissed";
 const DEFAULT_CONFIG = {
   owner: "xuzhidong-netizen",
   repo: "4.py",
@@ -89,6 +93,15 @@ function loadConfig() {
 function persistConfig(config) {
   currentConfig = { ...DEFAULT_CONFIG, ...config };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+}
+
+function shouldShowGuide() {
+  return window.localStorage.getItem(GUIDE_KEY) !== "1";
+}
+
+function dismissGuide() {
+  window.localStorage.setItem(GUIDE_KEY, "1");
+  guideDialog.close();
 }
 
 function getApiUrl(path) {
@@ -464,6 +477,20 @@ closeConfigButton.addEventListener("click", () => {
   configDialog.close();
 });
 
+dismissGuideButton.addEventListener("click", () => {
+  dismissGuide();
+});
+
+guideConnectButton.addEventListener("click", () => {
+  dismissGuide();
+  githubOwnerInput.value = currentConfig.owner;
+  githubRepoInput.value = currentConfig.repo;
+  githubBranchInput.value = currentConfig.branch;
+  githubFolderInput.value = currentConfig.folder;
+  githubTokenInput.value = currentConfig.token;
+  configDialog.showModal();
+});
+
 configForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -492,6 +519,10 @@ configForm.addEventListener("submit", async (event) => {
 });
 
 async function boot() {
+  if (shouldShowGuide()) {
+    guideDialog.showModal();
+  }
+
   if (!currentConfig.token) {
     showConnectionState("未连接 GitHub", "");
     setSaveState("未连接");
