@@ -74,12 +74,12 @@
             <div class="doc-flags">
               <span class="badge">协同编辑</span>
               <span class="save-state" id="save-state">已保存</span>
-              <span class="connection-state" id="connection-state">未连接 Supabase</span>
+              <span class="connection-state" id="connection-state">未连接 GitHub</span>
             </div>
           </div>
 
           <div class="top-actions">
-            <button class="ghost-btn" id="connect-btn">连接数据库</button>
+            <button class="ghost-btn" id="connect-btn">连接仓库</button>
             <button class="ghost-btn" id="share-btn">分享</button>
             <button class="primary-btn" id="export-btn">导出</button>
           </div>
@@ -194,22 +194,37 @@
     <dialog class="config-dialog" id="config-dialog">
       <form class="config-form" id="config-form" method="dialog">
         <div>
-          <p class="eyebrow">Supabase 连接</p>
+          <p class="eyebrow">GitHub 连接</p>
           <h2>配置真实保存</h2>
           <p class="config-copy">
-            填入你的 Project URL 和 anon key 后，页面会把文档真实保存到 Supabase 的
-            `documents` 表。
+            填入仓库信息和 GitHub token 后，页面会把文档真实保存到仓库里的
+            `documents/*.json` 文件。
           </p>
         </div>
 
         <label>
-          <span>Project URL</span>
-          <input id="supabase-url" name="supabase-url" type="url" placeholder="https://xxxx.supabase.co" required />
+          <span>Owner</span>
+          <input id="github-owner" name="github-owner" type="text" placeholder="xuzhidong-netizen" required />
         </label>
 
         <label>
-          <span>Anon Key</span>
-          <textarea id="supabase-key" name="supabase-key" rows="4" placeholder="sb_publishable_xxx 或 anon key" required></textarea>
+          <span>Repository</span>
+          <input id="github-repo" name="github-repo" type="text" placeholder="4.py" required />
+        </label>
+
+        <label>
+          <span>Branch</span>
+          <input id="github-branch" name="github-branch" type="text" placeholder="main" required />
+        </label>
+
+        <label>
+          <span>Folder</span>
+          <input id="github-folder" name="github-folder" type="text" placeholder="documents" required />
+        </label>
+
+        <label>
+          <span>Fine-grained token</span>
+          <textarea id="github-token" name="github-token" rows="4" placeholder="GitHub fine-grained PAT，至少要有 Contents: write" required></textarea>
         </label>
 
         <div class="dialog-actions">

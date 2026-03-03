@@ -1,56 +1,43 @@
 # iEnter Docs
 
-Static online document editor page with real persistence via Supabase REST.
+Static online document editor page with real persistence via GitHub repository files.
 
 ## Run locally
 
 Open `index.html` directly in a browser.
 
-## Supabase setup
+## GitHub setup
 
-Create a table named `documents`:
+Click `连接仓库` in the page and fill:
 
-```sql
-create extension if not exists pgcrypto;
+- `Owner`
+- `Repository`
+- `Branch`
+- `Folder` such as `documents`
+- `GitHub fine-grained token`
 
-create table if not exists public.documents (
-  id uuid primary key default gen_random_uuid(),
-  slug text not null unique,
-  title text not null,
-  content text not null default '',
-  updated_at timestamptz not null default now()
-);
+The page reads and writes JSON files like `documents/2026-market-plan.json`.
+
+Recommended token permissions:
+
+- Repository access: only the target repo
+- `Contents`: `Read and write`
+
+Stored file format:
+
+```json
+{
+  "title": "2026 市场合作方案",
+  "content": "<h1>2026 市场合作方案</h1><p>...</p>",
+  "updatedAt": "2026-03-03T04:00:00.000Z"
+}
 ```
 
-Enable RLS and add prototype policies for browser-side saving:
+Notes:
 
-```sql
-alter table public.documents enable row level security;
-
-create policy "public read documents"
-on public.documents
-for select
-to anon
-using (true);
-
-create policy "public insert documents"
-on public.documents
-for insert
-to anon
-with check (true);
-
-create policy "public update documents"
-on public.documents
-for update
-to anon
-using (true)
-with check (true);
-```
-
-Then click `连接数据库` in the page and paste:
-
-- `Project URL`
-- `anon key` or `publishable key`
+- The token is stored in browser `localStorage` on the current device.
+- This is suitable for internal tooling or prototypes, not for an untrusted public deployment.
+- Existing files in the target folder will be loaded into the left document list automatically.
 
 ## Deploy
 

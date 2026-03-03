@@ -12,16 +12,30 @@ const connectionState = document.querySelector("#connection-state");
 const configDialog = document.querySelector("#config-dialog");
 const configForm = document.querySelector("#config-form");
 const closeConfigButton = document.querySelector("#close-config");
-const supabaseUrlInput = document.querySelector("#supabase-url");
-const supabaseKeyInput = document.querySelector("#supabase-key");
+const githubOwnerInput = document.querySelector("#github-owner");
+const githubRepoInput = document.querySelector("#github-repo");
+const githubBranchInput = document.querySelector("#github-branch");
+const githubFolderInput = document.querySelector("#github-folder");
+const githubTokenInput = document.querySelector("#github-token");
 const toolButtons = document.querySelectorAll(".tool-btn");
 const fontFamily = document.querySelector("#font-family");
 const fontSize = document.querySelector("#font-size");
 
-const STORAGE_KEY = "ienter-docs-supabase-config";
+const STORAGE_KEY = "ienter-docs-github-config";
+const DEFAULT_CONFIG = {
+  owner: "xuzhidong-netizen",
+  repo: "4.py",
+  branch: "main",
+  folder: "documents",
+  token: "",
+};
+
 let saveTimer = null;
-let activeDocumentId = null;
-let activeDocumentSlug = "2026-market-plan";
+let activeDocument = {
+  path: null,
+  sha: null,
+  slug: "2026-market-plan",
+};
 let currentConfig = loadConfig();
 let docButtons = [...docItems];
 
@@ -34,20 +48,17 @@ function showToast(message) {
   }, 2200);
 }
 
-function markSaving() {
-  saveState.textContent = "保存中...";
-  saveState.classList.add("saving");
+function setSaveState(text, status = "") {
   window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => {
-    saveState.textContent = "已保存";
-    saveState.classList.remove("saving");
-  }, 900);
+  saveState.textContent = text;
+  saveState.classList.remove("saving");
+  if (status === "saving") {
+    saveState.classList.add("saving");
+  }
 }
 
-function setSaveError(message) {
-  window.clearTimeout(saveTimer);
-  saveState.textContent = message;
-  saveState.classList.remove("saving");
+function markSaving() {
+  setSaveState("保存中...", "saving");
 }
 
 function showConnectionState(text, status) {
@@ -69,31 +80,39 @@ function slugify(text) {
 function loadConfig() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_CONFIG };
   } catch {
-    return null;
+    return { ...DEFAULT_CONFIG };
   }
 }
 
 function persistConfig(config) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  currentConfig = config;
+  currentConfig = { ...DEFAULT_CONFIG, ...config };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+}
+
+function getApiUrl(path) {
+  return `https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/${path}`;
 }
 
 function getHeaders() {
   return {
-    apikey: currentConfig.key,
-    Authorization: `Bearer ${currentConfig.key}`,
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${currentConfig.token}`,
+    "X-GitHub-Api-Version": "2022-11-28",
     "Content-Type": "application/json",
   };
 }
 
-async function supabaseRequest(path, options = {}) {
-  if (!currentConfig?.url || !currentConfig?.key) {
-    throw new Error("missing_config");
+async function githubRequest(path, options = {}) {
+  if (!currentConfig.token) {
+    throw new Error("missing_token");
   }
 
-  const response = await fetch(`${currentConfig.url}/rest/v1/${path}`, {
+  const url = new URL(getApiUrl(path));
+  url.searchParams.set("ref", currentConfig.branch);
+
+  const response = await fetch(url, {
     ...options,
     headers: {
       ...getHeaders(),
@@ -106,20 +125,60 @@ async function supabaseRequest(path, options = {}) {
     throw new Error(errorText || `HTTP ${response.status}`);
   }
 
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return response.json();
-  }
-
-  return null;
+  return response.json();
 }
 
-function updateDocumentButton(button, title) {
-  button.dataset.title = title;
-  const titleNode = button.querySelector("strong");
-  if (titleNode) {
-    titleNode.textContent = title;
-  }
+function encodeBase64Utf8(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function decodeBase64Utf8(value) {
+  const binary = atob(value.replace(/\n/g, ""));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function formatTimestamp(date) {
+  return new Date(date).toLocaleString("zh-CN");
+}
+
+function buildDocumentPayload({ title, content, updatedAt }) {
+  return JSON.stringify(
+    {
+      title,
+      content,
+      updatedAt,
+    },
+    null,
+    2
+  );
+}
+
+function parseDocumentFile(file, rawContent) {
+  const parsed = JSON.parse(rawContent);
+  const slug = file.name.replace(/\.json$/i, "");
+  return {
+    title: parsed.title || slug,
+    content: parsed.content || "",
+    updatedAt: parsed.updatedAt || new Date().toISOString(),
+    path: file.path,
+    sha: file.sha,
+    slug,
+  };
+}
+
+function updateDocumentButton(button, record) {
+  button.dataset.title = record.title;
+  button.dataset.path = record.path;
+  button.dataset.sha = record.sha || "";
+  button.dataset.slug = record.slug;
+  button.querySelector("strong").textContent = record.title;
+  button.querySelector("small").textContent = formatTimestamp(record.updatedAt);
 }
 
 function activateButton(target) {
@@ -130,38 +189,56 @@ function activateButton(target) {
 function createDocumentButton(record) {
   const button = document.createElement("button");
   button.className = "doc-item";
-  button.dataset.title = record.title;
-  button.dataset.id = record.id;
-  button.dataset.slug = record.slug;
-  button.innerHTML = `
-    <strong>${record.title}</strong>
-    <small>${new Date(record.updated_at).toLocaleString("zh-CN")}</small>
-  `;
+  button.innerHTML = "<strong></strong><small></small>";
+  updateDocumentButton(button, record);
   button.addEventListener("click", () => handleDocumentSelection(button));
   return button;
 }
 
 function setEditorContent(record) {
-  activeDocumentId = record.id;
-  activeDocumentSlug = record.slug;
+  activeDocument = {
+    path: record.path,
+    sha: record.sha,
+    slug: record.slug,
+  };
   docTitle.value = record.title;
   editor.innerHTML = record.content;
 }
 
+async function listDocumentFiles() {
+  try {
+    const entries = await githubRequest(currentConfig.folder);
+    return Array.isArray(entries)
+      ? entries.filter((entry) => entry.type === "file" && entry.name.endsWith(".json"))
+      : [];
+  } catch (error) {
+    if (String(error.message).includes("404")) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function readDocumentFile(file) {
+  const data = await githubRequest(file.path);
+  return parseDocumentFile(data, decodeBase64Utf8(data.content));
+}
+
 async function fetchDocuments() {
-  const records = await supabaseRequest(
-    "documents?select=id,slug,title,content,updated_at&order=updated_at.desc"
-  );
+  const files = await listDocumentFiles();
+  const records = await Promise.all(files.map((file) => readDocumentFile(file)));
+  records.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
   const list = document.querySelector("#doc-list");
   list.innerHTML = "";
 
-  if (!records.length) {
+  let workingRecords = records;
+  if (!workingRecords.length) {
     const created = await createRemoteDocument("2026 市场合作方案", editor.innerHTML);
-    records.push(created);
+    workingRecords = [created];
   }
 
-  records.forEach((record, index) => {
+  workingRecords.forEach((record, index) => {
     const button = createDocumentButton(record);
     list.appendChild(button);
     if (index === 0) {
@@ -173,62 +250,85 @@ async function fetchDocuments() {
   docButtons = [...list.querySelectorAll(".doc-item")];
 }
 
-async function createRemoteDocument(title, content) {
-  const slug = slugify(title) || `doc-${Date.now()}`;
+async function upsertDocumentFile(path, content, sha) {
   const body = {
-    slug,
-    title,
-    content,
+    message: `${sha ? "Update" : "Create"} ${path}`,
+    content: encodeBase64Utf8(content),
+    branch: currentConfig.branch,
   };
 
-  const created = await supabaseRequest("documents", {
-    method: "POST",
-    headers: {
-      Prefer: "return=representation",
-    },
+  if (sha) {
+    body.sha = sha;
+  }
+
+  const response = await fetch(getApiUrl(path), {
+    method: "PUT",
+    headers: getHeaders(),
     body: JSON.stringify(body),
   });
 
-  return created[0];
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function createRemoteDocument(title, content) {
+  const updatedAt = new Date().toISOString();
+  const slug = slugify(title) || `doc-${Date.now()}`;
+  const path = `${currentConfig.folder}/${slug}.json`;
+  const payload = buildDocumentPayload({ title, content, updatedAt });
+  const result = await upsertDocumentFile(path, payload);
+
+  return {
+    title,
+    content,
+    updatedAt,
+    path: result.content.path,
+    sha: result.content.sha,
+    slug,
+  };
 }
 
 async function saveDocument() {
-  if (!currentConfig) {
-    setSaveError("未连接");
+  if (!currentConfig.token) {
+    setSaveState("未连接");
     return;
   }
 
   markSaving();
 
   const title = docTitle.value.trim() || "未命名文档";
-  const payload = {
-    slug: activeDocumentSlug || slugify(title) || `doc-${Date.now()}`,
+  const updatedAt = new Date().toISOString();
+  const slug = activeDocument.slug || slugify(title) || `doc-${Date.now()}`;
+  const path = activeDocument.path || `${currentConfig.folder}/${slug}.json`;
+  const payload = buildDocumentPayload({
     title,
     content: editor.innerHTML,
-    updated_at: new Date().toISOString(),
-  };
+    updatedAt,
+  });
 
   try {
-    let record;
+    const result = await upsertDocumentFile(path, payload, activeDocument.sha);
+    const record = {
+      title,
+      content: editor.innerHTML,
+      updatedAt,
+      path: result.content.path,
+      sha: result.content.sha,
+      slug,
+    };
 
-    if (activeDocumentId) {
-      const updated = await supabaseRequest(`documents?id=eq.${activeDocumentId}`, {
-        method: "PATCH",
-        headers: {
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(payload),
-      });
-      record = updated[0];
-    } else {
-      record = await createRemoteDocument(payload.title, payload.content);
-    }
-
-    activeDocumentId = record.id;
-    activeDocumentSlug = record.slug;
+    activeDocument = {
+      path: record.path,
+      sha: record.sha,
+      slug: record.slug,
+    };
 
     let activeButton =
-      document.querySelector(`.doc-item[data-id="${activeDocumentId}"]`) ||
+      document.querySelector(`.doc-item[data-path="${record.path}"]`) ||
       document.querySelector(".doc-item.active");
 
     if (!activeButton) {
@@ -238,24 +338,15 @@ async function saveDocument() {
       docButtons = [...list.querySelectorAll(".doc-item")];
     }
 
-    if (activeButton) {
-      activateButton(activeButton);
-      updateDocumentButton(activeButton, record.title);
-      activeButton.dataset.id = record.id;
-      activeButton.dataset.slug = record.slug;
-      const meta = activeButton.querySelector("small");
-      if (meta) {
-        meta.textContent = new Date(record.updated_at).toLocaleString("zh-CN");
-      }
-    }
-
-    showConnectionState("Supabase 已连接", "connected");
-    markSaving();
+    updateDocumentButton(activeButton, record);
+    activateButton(activeButton);
+    showConnectionState("GitHub 已连接", "connected");
+    setSaveState("已保存");
   } catch (error) {
     console.error(error);
-    setSaveError("保存失败");
+    setSaveState("保存失败");
     showConnectionState("连接异常", "error");
-    showToast("保存失败，请检查 Supabase 配置、表结构或 RLS 策略");
+    showToast("保存失败，请检查 token 权限或仓库配置");
   }
 }
 
@@ -268,31 +359,34 @@ function scheduleSave() {
 async function handleDocumentSelection(button) {
   activateButton(button);
 
-  if (!currentConfig || !button.dataset.id) {
+  if (!currentConfig.token || !button.dataset.path) {
     docTitle.value = button.dataset.title;
-    activeDocumentId = button.dataset.id || null;
-    activeDocumentSlug = button.dataset.slug || slugify(button.dataset.title);
+    activeDocument = {
+      path: button.dataset.path || null,
+      sha: button.dataset.sha || null,
+      slug: button.dataset.slug || slugify(button.dataset.title),
+    };
     showToast(`已切换到《${button.dataset.title}》`);
     return;
   }
 
   try {
-    const records = await supabaseRequest(
-      `documents?id=eq.${button.dataset.id}&select=id,slug,title,content,updated_at`
-    );
-    if (records[0]) {
-      setEditorContent(records[0]);
-    }
-    showToast(`已切换到《${button.dataset.title}》`);
+    const data = await githubRequest(button.dataset.path);
+    const record = parseDocumentFile(data, decodeBase64Utf8(data.content));
+    setEditorContent(record);
+    updateDocumentButton(button, record);
+    showToast(`已切换到《${record.title}》`);
   } catch (error) {
     console.error(error);
-    showToast("读取文档失败，请检查数据库连接");
+    showToast("读取文档失败，请检查仓库连接");
   }
 }
 
 editor.addEventListener("input", scheduleSave);
 docTitle.addEventListener("input", () => {
-  activeDocumentSlug = slugify(docTitle.value) || activeDocumentSlug;
+  if (!activeDocument.path) {
+    activeDocument.slug = slugify(docTitle.value) || activeDocument.slug;
+  }
   scheduleSave();
 });
 
@@ -346,17 +440,23 @@ exportButton.addEventListener("click", () => {
 newDocButton.addEventListener("click", () => {
   docTitle.value = "未命名文档";
   editor.innerHTML =
-    "<h1>未命名文档</h1><p>在这里开始记录新的文档内容。工具栏、自动保存与协作动态会随编辑同步更新。</p>";
+    "<h1>未命名文档</h1><p>在这里开始记录新的文档内容。保存后会写入 GitHub 仓库文件。</p>";
   docButtons.forEach((doc) => doc.classList.remove("active"));
-  activeDocumentId = null;
-  activeDocumentSlug = `doc-${Date.now()}`;
-  scheduleSave();
+  activeDocument = {
+    path: null,
+    sha: null,
+    slug: `doc-${Date.now()}`,
+  };
+  setSaveState(currentConfig.token ? "待保存" : "未连接");
   showToast("已创建新的空白文档");
 });
 
 connectButton.addEventListener("click", () => {
-  supabaseUrlInput.value = currentConfig?.url || "";
-  supabaseKeyInput.value = currentConfig?.key || "";
+  githubOwnerInput.value = currentConfig.owner;
+  githubRepoInput.value = currentConfig.repo;
+  githubBranchInput.value = currentConfig.branch;
+  githubFolderInput.value = currentConfig.folder;
+  githubTokenInput.value = currentConfig.token;
   configDialog.showModal();
 });
 
@@ -367,30 +467,34 @@ closeConfigButton.addEventListener("click", () => {
 configForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const config = {
-    url: supabaseUrlInput.value.trim().replace(/\/$/, ""),
-    key: supabaseKeyInput.value.trim(),
-  };
+  persistConfig({
+    owner: githubOwnerInput.value.trim(),
+    repo: githubRepoInput.value.trim(),
+    branch: githubBranchInput.value.trim() || "main",
+    folder: githubFolderInput.value.trim() || "documents",
+    token: githubTokenInput.value.trim(),
+  });
 
-  persistConfig(config);
   showConnectionState("连接中...", "");
 
   try {
     await fetchDocuments();
-    showConnectionState("Supabase 已连接", "connected");
-    showToast("数据库连接成功，文档将真实保存");
+    showConnectionState("GitHub 已连接", "connected");
+    setSaveState("已保存");
+    showToast("仓库连接成功，文档会写入 GitHub 文件");
     configDialog.close();
   } catch (error) {
     console.error(error);
     showConnectionState("连接异常", "error");
-    showToast("连接失败，请确认 documents 表和 RLS 策略已配置");
+    setSaveState("连接失败");
+    showToast("连接失败，请检查 token、仓库名或分支名");
   }
 });
 
 async function boot() {
-  if (!currentConfig) {
-    showConnectionState("未连接 Supabase", "");
-    setSaveError("未连接");
+  if (!currentConfig.token) {
+    showConnectionState("未连接 GitHub", "");
+    setSaveState("未连接");
     return;
   }
 
@@ -398,12 +502,12 @@ async function boot() {
 
   try {
     await fetchDocuments();
-    showConnectionState("Supabase 已连接", "connected");
-    setSaveError("已保存");
+    showConnectionState("GitHub 已连接", "connected");
+    setSaveState("已保存");
   } catch (error) {
     console.error(error);
     showConnectionState("连接异常", "error");
-    setSaveError("连接失败");
+    setSaveState("连接失败");
   }
 }
 
