@@ -93,7 +93,7 @@ function slugify(text) {
   return text
     .toLowerCase()
     .trim()
-    .replace(/[\s\W-]+/g, "-")
+    .replace(/[^\w\u4e00-\u9fff]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
@@ -141,6 +141,7 @@ function clearDraft(slug = activeDocument.slug || "draft") {
 function clearStoredToken() {
   currentConfig = { ...currentConfig, token: "" };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+  updateSessionSummary();
 }
 
 function readSharedParams() {
@@ -329,9 +330,17 @@ function getPlainPreview(html) {
   return (temp.textContent || "").trim().slice(0, 72) || "空白内容";
 }
 
+function escapeHtml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 function buildDefaultDocumentMarkup(title = "未命名文档") {
   return `
-    <h1>${title}</h1>
+    <h1>${escapeHtml(title)}</h1>
     <p>在这里开始记录新的文档内容。你可以直接覆盖下面的小节，也可以继续新增新的标题。</p>
     <h2>一、背景</h2>
     <p>补充本次文档的背景说明、目标范围与上下文。</p>
@@ -349,6 +358,23 @@ function ensureHeadingId(heading, index) {
   return heading.id;
 }
 
+function getPrimaryHeading() {
+  let heading = editor.querySelector("h1");
+  if (heading) {
+    return heading;
+  }
+
+  heading = document.createElement("h1");
+  heading.textContent = docTitle.value.trim() || "未命名文档";
+  editor.prepend(heading);
+  return heading;
+}
+
+function syncTitleHeading() {
+  const heading = getPrimaryHeading();
+  heading.textContent = docTitle.value.trim() || "未命名文档";
+}
+
 function buildOutline() {
   outlineList.innerHTML = "";
   const headings = [...editor.querySelectorAll("h1, h2")];
@@ -363,7 +389,7 @@ function buildOutline() {
   headings.forEach((heading, index) => {
     const id = ensureHeadingId(heading, index);
     const item = document.createElement("li");
-    item.innerHTML = `<a href="#${id}" data-outline-id="${id}">${heading.textContent.trim()}</a>`;
+    item.innerHTML = `<a href="#${id}" data-outline-id="${id}">${heading.textContent.trim() || "未命名标题"}</a>`;
     outlineList.appendChild(item);
   });
 }
@@ -453,11 +479,19 @@ function updateDocumentButton(button, record) {
 
 function buildShareUrl() {
   const url = new URL(SHARE_BASE_URL);
-  url.searchParams.set("owner", currentConfig.owner);
-  url.searchParams.set("repo", currentConfig.repo);
-  url.searchParams.set("branch", currentConfig.branch);
-  url.searchParams.set("folder", currentConfig.folder);
   url.searchParams.set("doc", activeDocument.slug || "draft");
+  if (currentConfig.owner !== DEFAULT_CONFIG.owner) {
+    url.searchParams.set("owner", currentConfig.owner);
+  }
+  if (currentConfig.repo !== DEFAULT_CONFIG.repo) {
+    url.searchParams.set("repo", currentConfig.repo);
+  }
+  if (currentConfig.branch !== DEFAULT_CONFIG.branch) {
+    url.searchParams.set("branch", currentConfig.branch);
+  }
+  if (currentConfig.folder !== DEFAULT_CONFIG.folder) {
+    url.searchParams.set("folder", currentConfig.folder);
+  }
   return url.toString();
 }
 
@@ -473,6 +507,16 @@ function createDocumentButton(record) {
   updateDocumentButton(button, record);
   button.addEventListener("click", () => handleDocumentSelection(button));
   return button;
+}
+
+function updateActiveButtonTitle(title) {
+  const button = document.querySelector(".doc-item.active");
+  if (!button) {
+    return;
+  }
+
+  button.dataset.title = title;
+  button.querySelector("strong").textContent = title;
 }
 
 function setEditorContent(record) {
@@ -493,6 +537,24 @@ function setEditorContent(record) {
   updateActiveOutline();
   renderHistory();
   dirty = false;
+}
+
+function restoreDraftDocument(draft, slug = sharedParams.doc || activeDocument.slug || "draft") {
+  docTitle.value = draft.title;
+  editor.innerHTML = draft.content;
+  activeDocument = {
+    path: null,
+    sha: null,
+    slug,
+    updatedAt: draft.updatedAt,
+    history: [],
+  };
+  updateStats();
+  updateSaveTime(draft.updatedAt);
+  updateUrlForDocument(activeDocument.slug);
+  buildOutline();
+  updateActiveOutline();
+  renderHistory();
 }
 
 async function listDocumentFiles() {
@@ -736,6 +798,8 @@ async function restoreHistoryItem(historyId) {
   docTitle.value = item.title;
   editor.innerHTML = item.content;
   updateStats();
+  buildOutline();
+  updateActiveOutline();
   dirty = true;
 
   await persistDocument({
@@ -755,7 +819,21 @@ function scheduleSave() {
   scheduleSave.timer = window.setTimeout(saveDocument, 800);
 }
 
+async function flushPendingSave() {
+  if (!dirty) {
+    return;
+  }
+
+  window.clearTimeout(scheduleSave.timer);
+  await saveDocument();
+}
+
 async function handleDocumentSelection(button) {
+  if (button.classList.contains("active")) {
+    return;
+  }
+
+  await flushPendingSave();
   activateButton(button);
 
   if (!button.dataset.path) {
@@ -793,6 +871,10 @@ docTitle.addEventListener("input", () => {
   if (!activeDocument.path) {
     activeDocument.slug = slugify(docTitle.value) || activeDocument.slug;
   }
+  syncTitleHeading();
+  updateActiveButtonTitle(docTitle.value.trim() || "未命名文档");
+  buildOutline();
+  updateActiveOutline();
   dirty = true;
   scheduleSave();
 });
@@ -890,7 +972,8 @@ exportButton.addEventListener("click", () => {
   showToast("已触发导出为 Word/PDF 的模拟流程");
 });
 
-newDocButton.addEventListener("click", () => {
+newDocButton.addEventListener("click", async () => {
+  await flushPendingSave();
   docTitle.value = "未命名文档";
   editor.innerHTML = buildDefaultDocumentMarkup("未命名文档");
   docButtons.forEach((doc) => doc.classList.remove("active"));
@@ -1012,17 +1095,10 @@ async function boot() {
     updateSessionSummary();
     buildOutline();
     updateActiveOutline();
-    if (!docButtons.length) {
-      const draft = loadDraft(sharedParams.doc || "draft");
-      if (draft) {
-        docTitle.value = draft.title;
-        editor.innerHTML = draft.content;
-        activeDocument.slug = sharedParams.doc || activeDocument.slug;
-        activeDocument.history = [];
-        updateStats();
-        updateSaveTime(draft.updatedAt);
-        updateUrlForDocument(activeDocument.slug);
-        renderHistory();
+  if (!docButtons.length) {
+    const draft = loadDraft(sharedParams.doc || "draft");
+    if (draft) {
+        restoreDraftDocument(draft);
         setSaveState("草稿已恢复");
       }
     }
@@ -1032,17 +1108,19 @@ async function boot() {
     setSaveState("连接失败");
     const draft = loadDraft(sharedParams.doc || "draft");
     if (draft) {
-      docTitle.value = draft.title;
-      editor.innerHTML = draft.content;
-      activeDocument.slug = sharedParams.doc || activeDocument.slug;
-      activeDocument.history = [];
-      updateStats();
-      updateSaveTime(draft.updatedAt);
-      updateUrlForDocument(activeDocument.slug);
-      renderHistory();
+      restoreDraftDocument(draft);
+      setSaveState("草稿已恢复");
       showToast("已从本机草稿恢复未同步内容");
     }
   }
 }
+
+window.__IENTER_TEST_HOOKS = Object.freeze({
+  slugify,
+  normalizeHistory,
+  buildNextHistory,
+  buildDefaultDocumentMarkup,
+  getPlainPreview,
+});
 
 boot();

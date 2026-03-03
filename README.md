@@ -2,9 +2,19 @@
 
 Static online document editor page with real persistence via GitHub repository files.
 
+Live URL:
+
+- [https://xuzhidong-netizen.github.io/4.py/](https://xuzhidong-netizen.github.io/4.py/)
+
 ## Run locally
 
-Open `index.html` directly in a browser.
+```bash
+python3 -m http.server 8080
+```
+
+Then open:
+
+- [http://localhost:8080](http://localhost:8080)
 
 ## GitHub setup
 
@@ -29,7 +39,8 @@ Stored file format:
 {
   "title": "2026 市场合作方案",
   "content": "<h1>2026 市场合作方案</h1><p>...</p>",
-  "updatedAt": "2026-03-03T04:00:00.000Z"
+  "updatedAt": "2026-03-03T04:00:00.000Z",
+  "history": []
 }
 ```
 
@@ -39,27 +50,25 @@ Notes:
 - This is suitable for internal tooling or prototypes, not for an untrusted public deployment.
 - Existing files in the target folder will be loaded into the left document list automatically.
 
-## Lightweight collaboration
+## Test commands
 
-The page can also use Supabase Realtime for lightweight multi-user sync while still saving final content to GitHub files.
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:system
+npm run test:stability
+npm run test:usability
+npm run test:all
+npm run check
+```
 
-Open `协同设置` and fill:
+Coverage:
 
-- `Supabase URL`
-- `Publishable key` or `anon key`
-- `Your name`
-
-What it does:
-
-- Broadcasts title and editor content to other online users in the same document room
-- Shows current online collaborators
-- Keeps GitHub as the source of persisted document files
-
-Limitations:
-
-- This is last-write-wins sync, not CRDT/OT
-- It does not sync cursor positions or comments
-- It is suitable for lightweight collaboration, not for Google Docs-level conflict handling
+- Unit tests: helpers such as slug generation and history snapshot rules
+- Integration tests: title-outline sync, history rename/delete/restore
+- System tests: link opening, share flow, new document flow
+- Stability tests: debounced saves and repeated history-safe saves
+- Usability tests: clear-token flow, empty states, local draft recovery
 
 ## Deploy
 

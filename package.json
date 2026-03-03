@@ -3,7 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:smoke": "node tests/smoke.mjs"
+    "test:unit": "node --test tests/unit.mjs",
+    "test:integration": "node --test tests/integration.mjs",
+    "test:system": "node --test tests/system.mjs",
+    "test:stability": "node --test tests/stability.mjs",
+    "test:usability": "node --test tests/usability.mjs",
+    "test:smoke": "npm run test:system",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:system && npm run test:stability && npm run test:usability",
+    "check": "node --check app.js && npm run test:all"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"
