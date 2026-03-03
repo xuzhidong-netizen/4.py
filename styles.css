@@ -450,6 +450,66 @@ button {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.panel-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.history-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.history-item {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.history-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.history-item p,
+.history-item small {
+  margin: 0;
+  color: var(--muted);
+}
+
+.history-item p {
+  line-height: 1.6;
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.mini-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text);
+}
+
+.mini-btn.danger {
+  background: rgba(214, 31, 44, 0.12);
+  color: #b42318;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+}
+
 .status-card {
   margin-top: 16px;
   padding: 16px;

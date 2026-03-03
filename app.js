@@ -25,6 +25,8 @@ const docStats = document.querySelector("#doc-stats");
 const saveTime = document.querySelector("#save-time");
 const sessionSummary = document.querySelector("#session-summary");
 const docEmpty = document.querySelector("#doc-empty");
+const historyList = document.querySelector("#history-list");
+const historyEmpty = document.querySelector("#history-empty");
 const toolButtons = document.querySelectorAll(".tool-btn");
 const fontFamily = document.querySelector("#font-family");
 const fontSize = document.querySelector("#font-size");
@@ -32,6 +34,7 @@ const fontSize = document.querySelector("#font-size");
 const STORAGE_KEY = "ienter-docs-github-config";
 const GUIDE_KEY = "ienter-docs-guide-dismissed";
 const DRAFT_PREFIX = "ienter-docs-draft";
+const HISTORY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const SHARE_BASE_URL = "https://xuzhidong-netizen.github.io/4.py/";
 const DEFAULT_CONFIG = {
   owner: "xuzhidong-netizen",
@@ -47,6 +50,8 @@ let activeDocument = {
   path: null,
   sha: null,
   slug: "2026-market-plan",
+  updatedAt: "",
+  history: [],
 };
 let currentConfig = loadConfig();
 let docButtons = [...docItems];
@@ -287,12 +292,77 @@ function formatTimestamp(date) {
   return new Date(date).toLocaleString("zh-CN");
 }
 
-function buildDocumentPayload({ title, content, updatedAt }) {
+function normalizeHistory(history = []) {
+  return [...history]
+    .filter((item) => item && item.id && item.createdAt)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function buildHistoryEntry({ title, content, createdAt }) {
+  return {
+    id: crypto.randomUUID(),
+    label: `自动快照 ${formatTimestamp(createdAt)}`,
+    title,
+    content,
+    createdAt,
+  };
+}
+
+function buildNextHistory(history, snapshot, skipHistory = false) {
+  const normalized = normalizeHistory(history);
+  if (skipHistory) {
+    return normalized;
+  }
+
+  const latest = normalized[0];
+  if (!latest || new Date(snapshot.createdAt) - new Date(latest.createdAt) >= HISTORY_INTERVAL_MS) {
+    return [buildHistoryEntry(snapshot), ...normalized];
+  }
+
+  return normalized;
+}
+
+function getPlainPreview(html) {
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  return (temp.textContent || "").trim().slice(0, 72) || "空白内容";
+}
+
+function renderHistory() {
+  historyList.innerHTML = "";
+
+  const items = normalizeHistory(activeDocument.history);
+  if (!items.length) {
+    historyEmpty.hidden = false;
+    historyList.appendChild(historyEmpty);
+    return;
+  }
+
+  historyEmpty.hidden = true;
+  items.forEach((item) => {
+    const article = document.createElement("article");
+    article.className = "history-item";
+    article.innerHTML = `
+      <strong>${item.label}</strong>
+      <p>${getPlainPreview(item.content)}</p>
+      <small>${formatTimestamp(item.createdAt)}</small>
+      <div class="history-actions">
+        <button class="mini-btn" data-action="restore" data-id="${item.id}">复原</button>
+        <button class="mini-btn" data-action="edit" data-id="${item.id}">编辑</button>
+        <button class="mini-btn danger" data-action="delete" data-id="${item.id}">删除</button>
+      </div>
+    `;
+    historyList.appendChild(article);
+  });
+}
+
+function buildDocumentPayload({ title, content, updatedAt, history = [] }) {
   return JSON.stringify(
     {
       title,
       content,
       updatedAt,
+      history,
     },
     null,
     2
@@ -309,6 +379,7 @@ function parseDocumentFile(file, rawContent) {
     path: file.path,
     sha: file.sha,
     slug,
+    history: normalizeHistory(parsed.history),
   };
 }
 
@@ -351,12 +422,15 @@ function setEditorContent(record) {
     path: effectiveRecord.path,
     sha: effectiveRecord.sha,
     slug: effectiveRecord.slug,
+    updatedAt: effectiveRecord.updatedAt,
+    history: normalizeHistory(effectiveRecord.history),
   };
   docTitle.value = effectiveRecord.title;
   editor.innerHTML = effectiveRecord.content;
   updateStats();
   updateSaveTime(effectiveRecord.updatedAt);
   updateUrlForDocument(effectiveRecord.slug);
+  renderHistory();
   dirty = false;
 }
 
@@ -396,6 +470,8 @@ async function fetchDocuments() {
   if (!workingRecords.length) {
     docButtons = [];
     docEmpty.hidden = false;
+    activeDocument.history = [];
+    renderHistory();
     return;
   }
 
@@ -448,7 +524,8 @@ async function createRemoteDocument(title, content) {
   const updatedAt = new Date().toISOString();
   const slug = slugify(title) || `doc-${Date.now()}`;
   const path = `${currentConfig.folder}/${slug}.json`;
-  const payload = buildDocumentPayload({ title, content, updatedAt });
+  const history = buildNextHistory([], { title, content, createdAt: updatedAt });
+  const payload = buildDocumentPayload({ title, content, updatedAt, history });
   const result = await upsertDocumentFile(path, payload);
 
   return {
@@ -458,44 +535,50 @@ async function createRemoteDocument(title, content) {
     path: result.content.path,
     sha: result.content.sha,
     slug,
+    history,
   };
 }
 
-async function saveDocument() {
+async function persistDocument(options = {}) {
   if (!currentConfig.token) {
     saveDraft();
     setSaveState("未连接");
     updateSaveTime(new Date().toISOString());
-    return;
+    return null;
   }
 
   markSaving();
 
-  const title = docTitle.value.trim() || "未命名文档";
+  const title = options.title || docTitle.value.trim() || "未命名文档";
+  const content = options.content || editor.innerHTML;
   const updatedAt = new Date().toISOString();
   const slug = activeDocument.slug || slugify(title) || `doc-${Date.now()}`;
   const path = activeDocument.path || `${currentConfig.folder}/${slug}.json`;
-  const payload = buildDocumentPayload({
-    title,
-    content: editor.innerHTML,
-    updatedAt,
-  });
+  const history = buildNextHistory(
+    options.history ?? activeDocument.history,
+    { title, content, createdAt: updatedAt },
+    options.skipHistory === true
+  );
+  const payload = buildDocumentPayload({ title, content, updatedAt, history });
 
   try {
     const result = await upsertDocumentFile(path, payload, activeDocument.sha);
     const record = {
       title,
-      content: editor.innerHTML,
+      content,
       updatedAt,
       path: result.content.path,
       sha: result.content.sha,
       slug,
+      history,
     };
 
     activeDocument = {
       path: record.path,
       sha: record.sha,
       slug: record.slug,
+      updatedAt: record.updatedAt,
+      history: record.history,
     };
 
     let activeButton =
@@ -512,11 +595,16 @@ async function saveDocument() {
     updateDocumentButton(activeButton, record);
     activateButton(activeButton);
     showConnectionState("GitHub 已连接", "connected");
-    setSaveState("已保存");
+    setSaveState(options.successState || "已保存");
     updateSaveTime(record.updatedAt);
     updateUrlForDocument(record.slug);
     clearDraft(record.slug);
+    renderHistory();
     dirty = false;
+    if (options.successToast) {
+      showToast(options.successToast);
+    }
+    return record;
   } catch (error) {
     console.error(error);
     saveDraft();
@@ -524,7 +612,78 @@ async function saveDocument() {
     showConnectionState("连接异常", "error");
     updateSaveTime(new Date().toISOString());
     showToast("保存失败，已自动保存在本机草稿");
+    return null;
   }
+}
+
+async function saveDocument() {
+  return persistDocument();
+}
+
+function findHistoryItem(historyId) {
+  return normalizeHistory(activeDocument.history).find((item) => item.id === historyId);
+}
+
+async function renameHistoryItem(historyId) {
+  const item = findHistoryItem(historyId);
+  if (!item) {
+    return;
+  }
+
+  const nextLabel = window.prompt("输入历史记录名称", item.label);
+  if (!nextLabel || nextLabel.trim() === item.label) {
+    return;
+  }
+
+  const history = normalizeHistory(activeDocument.history).map((entry) =>
+    entry.id === historyId ? { ...entry, label: nextLabel.trim() } : entry
+  );
+
+  await persistDocument({
+    history,
+    skipHistory: true,
+    successToast: "历史记录名称已更新",
+  });
+}
+
+async function deleteHistoryItem(historyId) {
+  const item = findHistoryItem(historyId);
+  if (!item) {
+    return;
+  }
+
+  const confirmed = window.confirm(`确定删除历史记录“${item.label}”吗？`);
+  if (!confirmed) {
+    return;
+  }
+
+  const history = normalizeHistory(activeDocument.history).filter((entry) => entry.id !== historyId);
+
+  await persistDocument({
+    history,
+    skipHistory: true,
+    successToast: "历史记录已删除",
+  });
+}
+
+async function restoreHistoryItem(historyId) {
+  const item = findHistoryItem(historyId);
+  if (!item) {
+    return;
+  }
+
+  docTitle.value = item.title;
+  editor.innerHTML = item.content;
+  updateStats();
+  dirty = true;
+
+  await persistDocument({
+    title: item.title,
+    content: item.content,
+    history: activeDocument.history,
+    skipHistory: true,
+    successToast: `已复原到 ${item.label}`,
+  });
 }
 
 function scheduleSave() {
@@ -595,6 +754,22 @@ docSearch.addEventListener("input", (event) => {
   docEmpty.hidden = visibleCount !== 0;
 });
 
+historyList.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) {
+    return;
+  }
+
+  const { action, id } = button.dataset;
+  if (action === "edit") {
+    await renameHistoryItem(id);
+  } else if (action === "delete") {
+    await deleteHistoryItem(id);
+  } else if (action === "restore") {
+    await restoreHistoryItem(id);
+  }
+});
+
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const command = button.dataset.command;
@@ -643,11 +818,14 @@ newDocButton.addEventListener("click", () => {
     path: null,
     sha: null,
     slug: `doc-${Date.now()}`,
+    updatedAt: "",
+    history: [],
   };
   setSaveState(currentConfig.token ? "待保存" : "未连接");
   updateStats();
   updateSaveTime("");
   updateUrlForDocument(activeDocument.slug);
+  renderHistory();
   saveDraft();
   showToast("已创建新的空白文档");
 });
@@ -756,9 +934,11 @@ async function boot() {
         docTitle.value = draft.title;
         editor.innerHTML = draft.content;
         activeDocument.slug = sharedParams.doc || activeDocument.slug;
+        activeDocument.history = [];
         updateStats();
         updateSaveTime(draft.updatedAt);
         updateUrlForDocument(activeDocument.slug);
+        renderHistory();
         setSaveState("草稿已恢复");
       }
     }
@@ -771,9 +951,11 @@ async function boot() {
       docTitle.value = draft.title;
       editor.innerHTML = draft.content;
       activeDocument.slug = sharedParams.doc || activeDocument.slug;
+      activeDocument.history = [];
       updateStats();
       updateSaveTime(draft.updatedAt);
       updateUrlForDocument(activeDocument.slug);
+      renderHistory();
       showToast("已从本机草稿恢复未同步内容");
     }
   }
