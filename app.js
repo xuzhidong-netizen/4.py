@@ -65,6 +65,7 @@ let collabEnabled = false;
 let applyingRemote = false;
 let lastRemoteTimestamp = 0;
 const clientId = `client-${crypto.randomUUID()}`;
+const sharedParams = readSharedParams();
 
 function showToast(message) {
   toast.textContent = message;
@@ -154,6 +155,46 @@ function persistCollabConfig(config) {
   window.localStorage.setItem(COLLAB_KEY, JSON.stringify(collabConfig));
 }
 
+function readSharedParams() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    owner: params.get("owner") || "",
+    repo: params.get("repo") || "",
+    branch: params.get("branch") || "",
+    folder: params.get("folder") || "",
+    doc: params.get("doc") || "",
+    collabUrl: params.get("collabUrl") || "",
+    collabKey: params.get("collabKey") || "",
+  };
+}
+
+function applySharedParams() {
+  const nextConfig = { ...currentConfig };
+  const nextCollabConfig = { ...collabConfig };
+
+  if (sharedParams.owner) {
+    nextConfig.owner = sharedParams.owner;
+  }
+  if (sharedParams.repo) {
+    nextConfig.repo = sharedParams.repo;
+  }
+  if (sharedParams.branch) {
+    nextConfig.branch = sharedParams.branch;
+  }
+  if (sharedParams.folder) {
+    nextConfig.folder = sharedParams.folder;
+  }
+  if (sharedParams.collabUrl) {
+    nextCollabConfig.url = sharedParams.collabUrl;
+  }
+  if (sharedParams.collabKey) {
+    nextCollabConfig.key = sharedParams.collabKey;
+  }
+
+  currentConfig = nextConfig;
+  collabConfig = nextCollabConfig;
+}
+
 function shouldShowGuide() {
   return window.localStorage.getItem(GUIDE_KEY) !== "1";
 }
@@ -167,17 +208,25 @@ function getApiUrl(path) {
   return `https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/${path}`;
 }
 
-function getHeaders() {
-  return {
+function getHeaders(includeAuth = true) {
+  const headers = {
     Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${currentConfig.token}`,
     "X-GitHub-Api-Version": "2022-11-28",
     "Content-Type": "application/json",
   };
+
+  if (includeAuth && currentConfig.token) {
+    headers.Authorization = `Bearer ${currentConfig.token}`;
+  }
+
+  return headers;
 }
 
 async function githubRequest(path, options = {}) {
-  if (!currentConfig.token) {
+  const method = options.method || "GET";
+  const includeAuth = Boolean(currentConfig.token);
+
+  if (method !== "GET" && !currentConfig.token) {
     throw new Error("missing_token");
   }
 
@@ -187,7 +236,7 @@ async function githubRequest(path, options = {}) {
   const response = await fetch(url, {
     ...options,
     headers: {
-      ...getHeaders(),
+      ...getHeaders(includeAuth),
       ...(options.headers || {}),
     },
   });
@@ -251,6 +300,25 @@ function updateDocumentButton(button, record) {
   button.dataset.slug = record.slug;
   button.querySelector("strong").textContent = record.title;
   button.querySelector("small").textContent = formatTimestamp(record.updatedAt);
+}
+
+function buildShareUrl() {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.searchParams.set("owner", currentConfig.owner);
+  url.searchParams.set("repo", currentConfig.repo);
+  url.searchParams.set("branch", currentConfig.branch);
+  url.searchParams.set("folder", currentConfig.folder);
+  url.searchParams.set("doc", activeDocument.slug || "draft");
+
+  if (collabConfig.url) {
+    url.searchParams.set("collabUrl", collabConfig.url);
+  }
+  if (collabConfig.key) {
+    url.searchParams.set("collabKey", collabConfig.key);
+  }
+
+  return url.toString();
 }
 
 function activateButton(target) {
@@ -457,6 +525,13 @@ async function fetchDocuments() {
   });
 
   docButtons = [...list.querySelectorAll(".doc-item")];
+
+  if (sharedParams.doc) {
+    const requestedButton = docButtons.find((button) => button.dataset.slug === sharedParams.doc);
+    if (requestedButton) {
+      await handleDocumentSelection(requestedButton);
+    }
+  }
 }
 
 async function upsertDocumentFile(path, content, sha) {
@@ -651,7 +726,15 @@ fontSize.addEventListener("change", (event) => {
 });
 
 shareButton.addEventListener("click", () => {
-  showToast("分享链接已复制到剪贴板的模拟流程已触发");
+  const url = buildShareUrl();
+  navigator.clipboard
+    .writeText(url)
+    .then(() => {
+      showToast("文档分享链接已复制");
+    })
+    .catch(() => {
+      showToast(`分享链接：${url}`);
+    });
 });
 
 exportButton.addEventListener("click", () => {
@@ -760,25 +843,27 @@ collabForm.addEventListener("submit", async (event) => {
 });
 
 async function boot() {
+  applySharedParams();
+
   if (shouldShowGuide()) {
     guideDialog.showModal();
   }
 
   renderPresence([]);
 
-  if (!currentConfig.token) {
+  if (!currentConfig.token && !(currentConfig.owner && currentConfig.repo)) {
     showConnectionState("未连接 GitHub", "");
     setSaveState("未连接");
     setPresenceState(collabConfig.url ? "待连接文档" : "未开启实时协同");
     return;
   }
 
-  showConnectionState("连接中...", "");
+  showConnectionState(currentConfig.token ? "连接中..." : "只读访问中...", "");
 
   try {
     await fetchDocuments();
-    showConnectionState("GitHub 已连接", "connected");
-    setSaveState("已保存");
+    showConnectionState(currentConfig.token ? "GitHub 已连接" : "GitHub 只读访问", "connected");
+    setSaveState(currentConfig.token ? "已保存" : "只读");
     await joinCollabChannel();
   } catch (error) {
     console.error(error);
