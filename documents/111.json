@@ -1,5 +1,14 @@
 {
   "title": "111",
-  "content": "<h1>未命名文档</h1><p>在这里文档内容。保存后会写入 GitHub 仓库文件。</p><p><br></p><p>lalal1</p><p><br></p>",
-  "updatedAt": "2026-03-03T05:16:39.199Z"
+  "content": "<h1>未命名文档</h1><p>在这里文档内容。保存后会写入 GitHub 仓库文件。</p><p><br></p><p>lalal1</p><p><br></p><p><br></p><p>你好‘</p><p><br></p>",
+  "updatedAt": "2026-03-03T06:11:03.283Z",
+  "history": [
+    {
+      "id": "4b2cebce-5394-4806-aaff-9ccddba386b5",
+      "label": "自动快照 2026/3/3 14:11:03",
+      "title": "111",
+      "content": "<h1>未命名文档</h1><p>在这里文档内容。保存后会写入 GitHub 仓库文件。</p><p><br></p><p>lalal1</p><p><br></p><p><br></p><p>你好‘</p><p><br></p>",
+      "createdAt": "2026-03-03T06:11:03.283Z"
+    }
+  ]
 }
