@@ -187,7 +187,7 @@ function updateSaveTime(value) {
 }
 
 function updateStats() {
-  const text = editor.innerText.replace(/\s+/g, "");
+  const text = (editor.innerText || editor.textContent || "").replace(/\s+/g, "");
   const paragraphs = editor.querySelectorAll("p, h1, h2, li").length;
   docStats.textContent = `${text.length} 字 · ${paragraphs} 段`;
 }
@@ -329,6 +329,19 @@ function getPlainPreview(html) {
   return (temp.textContent || "").trim().slice(0, 72) || "空白内容";
 }
 
+function buildDefaultDocumentMarkup(title = "未命名文档") {
+  return `
+    <h1>${title}</h1>
+    <p>在这里开始记录新的文档内容。你可以直接覆盖下面的小节，也可以继续新增新的标题。</p>
+    <h2>一、背景</h2>
+    <p>补充本次文档的背景说明、目标范围与上下文。</p>
+    <h2>二、正文</h2>
+    <p>在这里编写核心内容、结论和执行细节。</p>
+    <h2>三、待办</h2>
+    <p>记录下一步动作、负责人和截止时间。</p>
+  `;
+}
+
 function ensureHeadingId(heading, index) {
   if (!heading.id) {
     heading.id = `section-${index + 1}`;
@@ -338,11 +351,11 @@ function ensureHeadingId(heading, index) {
 
 function buildOutline() {
   outlineList.innerHTML = "";
-  const headings = [...editor.querySelectorAll("h2")];
+  const headings = [...editor.querySelectorAll("h1, h2")];
 
   if (!headings.length) {
     const item = document.createElement("li");
-    item.innerHTML = '<a href="#top">当前没有二级标题</a>';
+    item.innerHTML = '<a href="#top">当前没有标题</a>';
     outlineList.appendChild(item);
     return;
   }
@@ -356,7 +369,7 @@ function buildOutline() {
 }
 
 function updateActiveOutline() {
-  const headings = [...editor.querySelectorAll("h2[id]")];
+  const headings = [...editor.querySelectorAll("h1[id], h2[id]")];
   if (!headings.length) {
     return;
   }
@@ -879,8 +892,7 @@ exportButton.addEventListener("click", () => {
 
 newDocButton.addEventListener("click", () => {
   docTitle.value = "未命名文档";
-  editor.innerHTML =
-    "<h1>未命名文档</h1><p>在这里开始记录新的文档内容。保存后会写入 GitHub 仓库文件。</p>";
+  editor.innerHTML = buildDefaultDocumentMarkup("未命名文档");
   docButtons.forEach((doc) => doc.classList.remove("active"));
   activeDocument = {
     path: null,
@@ -893,6 +905,8 @@ newDocButton.addEventListener("click", () => {
   updateStats();
   updateSaveTime("");
   updateUrlForDocument(activeDocument.slug);
+  buildOutline();
+  updateActiveOutline();
   renderHistory();
   saveDraft();
   showToast("已创建新的空白文档");

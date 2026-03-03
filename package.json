@@ -1,0 +1,11 @@
+{
+  "name": "ienter-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:smoke": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
