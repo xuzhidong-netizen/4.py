@@ -54,6 +54,7 @@
               <small>昨天 · 徐志东</small>
             </button>
           </div>
+          <p class="doc-empty" id="doc-empty" hidden>没有匹配的文档</p>
         </div>
 
         <section class="storage-card">
@@ -72,15 +73,20 @@
           <div class="doc-meta">
             <input id="doc-title" class="doc-title" value="2026 市场合作方案" />
             <div class="doc-flags">
-              <span class="badge">协同编辑</span>
+              <span class="badge">云端文档</span>
               <span class="save-state" id="save-state">已保存</span>
               <span class="connection-state" id="connection-state">未连接 GitHub</span>
+            </div>
+            <div class="doc-submeta">
+              <span id="doc-stats">0 字 · 0 段</span>
+              <span id="save-time">尚未保存</span>
+              <span id="shortcut-hint">Ctrl/Command + S 立即保存</span>
             </div>
           </div>
 
           <div class="top-actions">
             <button class="ghost-btn" id="connect-btn">连接仓库</button>
-            <button class="ghost-btn" id="share-btn">分享</button>
+            <button class="ghost-btn" id="share-btn">复制分享链接</button>
             <button class="primary-btn" id="export-btn">导出</button>
           </div>
         </header>
@@ -186,6 +192,10 @@
                 <small>29 分钟前</small>
               </article>
             </div>
+            <div class="status-card">
+              <strong>当前设备</strong>
+              <p id="session-summary">未连接仓库，当前处于本地编辑状态。</p>
+            </div>
           </aside>
         </div>
       </main>
@@ -197,37 +207,42 @@
           <p class="eyebrow">GitHub 连接</p>
           <h2>配置真实保存</h2>
           <p class="config-copy">
-            填入仓库信息和 GitHub token 后，页面会把文档真实保存到仓库里的
-            `documents/*.json` 文件。
+            默认已经预填当前项目仓库。日常使用通常只需要补一个 GitHub token。
           </p>
         </div>
-
-        <label>
-          <span>Owner</span>
-          <input id="github-owner" name="github-owner" type="text" placeholder="xuzhidong-netizen" required />
-        </label>
-
-        <label>
-          <span>Repository</span>
-          <input id="github-repo" name="github-repo" type="text" placeholder="4.py" required />
-        </label>
-
-        <label>
-          <span>Branch</span>
-          <input id="github-branch" name="github-branch" type="text" placeholder="main" required />
-        </label>
-
-        <label>
-          <span>Folder</span>
-          <input id="github-folder" name="github-folder" type="text" placeholder="documents" required />
-        </label>
 
         <label>
           <span>Fine-grained token</span>
           <textarea id="github-token" name="github-token" rows="4" placeholder="GitHub fine-grained PAT，至少要有 Contents: write" required></textarea>
         </label>
 
+        <details class="advanced-config">
+          <summary>高级设置</summary>
+          <div class="advanced-grid">
+            <label>
+              <span>Owner</span>
+              <input id="github-owner" name="github-owner" type="text" placeholder="xuzhidong-netizen" required />
+            </label>
+
+            <label>
+              <span>Repository</span>
+              <input id="github-repo" name="github-repo" type="text" placeholder="4.py" required />
+            </label>
+
+            <label>
+              <span>Branch</span>
+              <input id="github-branch" name="github-branch" type="text" placeholder="main" required />
+            </label>
+
+            <label>
+              <span>Folder</span>
+              <input id="github-folder" name="github-folder" type="text" placeholder="documents" required />
+            </label>
+          </div>
+        </details>
+
         <div class="dialog-actions">
+          <button type="button" class="ghost-btn" id="clear-token">清除本地 token</button>
           <button type="button" class="ghost-btn" id="close-config">取消</button>
           <button type="submit" class="primary-btn">保存并连接</button>
         </div>

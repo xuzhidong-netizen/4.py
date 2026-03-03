@@ -12,6 +12,7 @@ const connectionState = document.querySelector("#connection-state");
 const configDialog = document.querySelector("#config-dialog");
 const configForm = document.querySelector("#config-form");
 const closeConfigButton = document.querySelector("#close-config");
+const clearTokenButton = document.querySelector("#clear-token");
 const guideDialog = document.querySelector("#guide-dialog");
 const dismissGuideButton = document.querySelector("#dismiss-guide");
 const guideConnectButton = document.querySelector("#guide-connect");
@@ -20,12 +21,17 @@ const githubRepoInput = document.querySelector("#github-repo");
 const githubBranchInput = document.querySelector("#github-branch");
 const githubFolderInput = document.querySelector("#github-folder");
 const githubTokenInput = document.querySelector("#github-token");
+const docStats = document.querySelector("#doc-stats");
+const saveTime = document.querySelector("#save-time");
+const sessionSummary = document.querySelector("#session-summary");
+const docEmpty = document.querySelector("#doc-empty");
 const toolButtons = document.querySelectorAll(".tool-btn");
 const fontFamily = document.querySelector("#font-family");
 const fontSize = document.querySelector("#font-size");
 
 const STORAGE_KEY = "ienter-docs-github-config";
 const GUIDE_KEY = "ienter-docs-guide-dismissed";
+const DRAFT_PREFIX = "ienter-docs-draft";
 const SHARE_BASE_URL = "https://xuzhidong-netizen.github.io/4.py/";
 const DEFAULT_CONFIG = {
   owner: "xuzhidong-netizen",
@@ -36,6 +42,7 @@ const DEFAULT_CONFIG = {
 };
 
 let saveTimer = null;
+let dirty = false;
 let activeDocument = {
   path: null,
   sha: null,
@@ -73,6 +80,7 @@ function showConnectionState(text, status) {
   if (status) {
     connectionState.classList.add(status);
   }
+  updateSessionSummary();
 }
 
 function slugify(text) {
@@ -94,6 +102,38 @@ function loadConfig() {
 
 function persistConfig(config) {
   currentConfig = { ...DEFAULT_CONFIG, ...config };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+}
+
+function getDraftKey(slug = activeDocument.slug || "draft") {
+  return `${DRAFT_PREFIX}:${currentConfig.owner}:${currentConfig.repo}:${currentConfig.branch}:${currentConfig.folder}:${slug}`;
+}
+
+function saveDraft() {
+  const slug = activeDocument.slug || slugify(docTitle.value) || "draft";
+  const draft = {
+    title: docTitle.value.trim() || "未命名文档",
+    content: editor.innerHTML,
+    updatedAt: new Date().toISOString(),
+  };
+  window.localStorage.setItem(getDraftKey(slug), JSON.stringify(draft));
+}
+
+function loadDraft(slug = activeDocument.slug || sharedParams.doc || "draft") {
+  try {
+    const raw = window.localStorage.getItem(getDraftKey(slug));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(slug = activeDocument.slug || "draft") {
+  window.localStorage.removeItem(getDraftKey(slug));
+}
+
+function clearStoredToken() {
+  currentConfig = { ...currentConfig, token: "" };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
 }
 
@@ -134,6 +174,53 @@ function shouldShowGuide() {
 function dismissGuide() {
   window.localStorage.setItem(GUIDE_KEY, "1");
   guideDialog.close();
+}
+
+function updateSaveTime(value) {
+  saveTime.textContent = value ? `最近保存 ${formatTimestamp(value)}` : "尚未保存";
+}
+
+function updateStats() {
+  const text = editor.innerText.replace(/\s+/g, "");
+  const paragraphs = editor.querySelectorAll("p, h1, h2, li").length;
+  docStats.textContent = `${text.length} 字 · ${paragraphs} 段`;
+}
+
+function updateSessionSummary() {
+  if (!currentConfig.token) {
+    sessionSummary.textContent = "当前未连接 GitHub。修改会先保存在本机草稿里，连接仓库后再写回云端。";
+    return;
+  }
+
+  sessionSummary.textContent = `当前保存目标：${currentConfig.owner}/${currentConfig.repo} · ${currentConfig.branch}/${currentConfig.folder}`;
+}
+
+function updateUrlForDocument(slug = activeDocument.slug || "draft") {
+  const url = new URL(window.location.href);
+  url.searchParams.set("owner", currentConfig.owner);
+  url.searchParams.set("repo", currentConfig.repo);
+  url.searchParams.set("branch", currentConfig.branch);
+  url.searchParams.set("folder", currentConfig.folder);
+  url.searchParams.set("doc", slug);
+  window.history.replaceState({}, "", url);
+}
+
+function restoreDraftIfNeeded(record) {
+  const draft = loadDraft(record.slug);
+  if (!draft) {
+    return record;
+  }
+
+  if (new Date(draft.updatedAt) > new Date(record.updatedAt)) {
+    return {
+      ...record,
+      title: draft.title,
+      content: draft.content,
+      updatedAt: draft.updatedAt,
+    };
+  }
+
+  return record;
 }
 
 function getApiUrl(path) {
@@ -259,13 +346,18 @@ function createDocumentButton(record) {
 }
 
 function setEditorContent(record) {
+  const effectiveRecord = restoreDraftIfNeeded(record);
   activeDocument = {
-    path: record.path,
-    sha: record.sha,
-    slug: record.slug,
+    path: effectiveRecord.path,
+    sha: effectiveRecord.sha,
+    slug: effectiveRecord.slug,
   };
-  docTitle.value = record.title;
-  editor.innerHTML = record.content;
+  docTitle.value = effectiveRecord.title;
+  editor.innerHTML = effectiveRecord.content;
+  updateStats();
+  updateSaveTime(effectiveRecord.updatedAt);
+  updateUrlForDocument(effectiveRecord.slug);
+  dirty = false;
 }
 
 async function listDocumentFiles() {
@@ -301,6 +393,12 @@ async function fetchDocuments() {
     workingRecords = [created];
   }
 
+  if (!workingRecords.length) {
+    docButtons = [];
+    docEmpty.hidden = false;
+    return;
+  }
+
   workingRecords.forEach((record, index) => {
     const button = createDocumentButton(record);
     list.appendChild(button);
@@ -311,6 +409,7 @@ async function fetchDocuments() {
   });
 
   docButtons = [...list.querySelectorAll(".doc-item")];
+  docEmpty.hidden = true;
 
   if (sharedParams.doc) {
     const requestedButton = docButtons.find((button) => button.dataset.slug === sharedParams.doc);
@@ -364,7 +463,9 @@ async function createRemoteDocument(title, content) {
 
 async function saveDocument() {
   if (!currentConfig.token) {
+    saveDraft();
     setSaveState("未连接");
+    updateSaveTime(new Date().toISOString());
     return;
   }
 
@@ -412,16 +513,24 @@ async function saveDocument() {
     activateButton(activeButton);
     showConnectionState("GitHub 已连接", "connected");
     setSaveState("已保存");
+    updateSaveTime(record.updatedAt);
+    updateUrlForDocument(record.slug);
+    clearDraft(record.slug);
+    dirty = false;
   } catch (error) {
     console.error(error);
+    saveDraft();
     setSaveState("保存失败");
     showConnectionState("连接异常", "error");
-    showToast("保存失败，请检查 token 权限或仓库配置");
+    updateSaveTime(new Date().toISOString());
+    showToast("保存失败，已自动保存在本机草稿");
   }
 }
 
 function scheduleSave() {
   markSaving();
+  dirty = true;
+  saveDraft();
   window.clearTimeout(scheduleSave.timer);
   scheduleSave.timer = window.setTimeout(saveDocument, 800);
 }
@@ -436,6 +545,7 @@ async function handleDocumentSelection(button) {
       sha: null,
       slug: button.dataset.slug || slugify(button.dataset.title),
     };
+    updateUrlForDocument(activeDocument.slug);
     showToast(`已切换到《${button.dataset.title}》`);
     return;
   }
@@ -452,12 +562,16 @@ async function handleDocumentSelection(button) {
   }
 }
 
-editor.addEventListener("input", scheduleSave);
+editor.addEventListener("input", () => {
+  updateStats();
+  scheduleSave();
+});
 
 docTitle.addEventListener("input", () => {
   if (!activeDocument.path) {
     activeDocument.slug = slugify(docTitle.value) || activeDocument.slug;
   }
+  dirty = true;
   scheduleSave();
 });
 
@@ -467,12 +581,18 @@ docButtons.forEach((item) => {
 
 docSearch.addEventListener("input", (event) => {
   const keyword = event.target.value.trim().toLowerCase();
+  let visibleCount = 0;
 
   docButtons.forEach((item) => {
     const matched = !keyword || item.textContent.toLowerCase().includes(keyword);
     item.classList.toggle("match", keyword && matched);
     item.style.display = matched ? "flex" : "none";
+    if (matched) {
+      visibleCount += 1;
+    }
   });
+
+  docEmpty.hidden = visibleCount !== 0;
 });
 
 toolButtons.forEach((button) => {
@@ -504,7 +624,7 @@ shareButton.addEventListener("click", async () => {
   const url = buildShareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    showToast("线上分享链接已复制");
+    showToast("线上分享链接已复制，可直接发给别人");
   } catch {
     showToast(url);
   }
@@ -525,6 +645,10 @@ newDocButton.addEventListener("click", () => {
     slug: `doc-${Date.now()}`,
   };
   setSaveState(currentConfig.token ? "待保存" : "未连接");
+  updateStats();
+  updateSaveTime("");
+  updateUrlForDocument(activeDocument.slug);
+  saveDraft();
   showToast("已创建新的空白文档");
 });
 
@@ -535,6 +659,14 @@ connectButton.addEventListener("click", () => {
   githubFolderInput.value = currentConfig.folder;
   githubTokenInput.value = currentConfig.token;
   configDialog.showModal();
+});
+
+clearTokenButton.addEventListener("click", () => {
+  clearStoredToken();
+  githubTokenInput.value = "";
+  showConnectionState("未连接 GitHub", "");
+  setSaveState("未连接");
+  showToast("已清除本地 token");
 });
 
 closeConfigButton.addEventListener("click", () => {
@@ -582,6 +714,21 @@ configForm.addEventListener("submit", async (event) => {
   }
 });
 
+window.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    saveDocument();
+  }
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (!dirty) {
+    return;
+  }
+  event.preventDefault();
+  event.returnValue = "";
+});
+
 async function boot() {
   applySharedParams();
 
@@ -601,10 +748,34 @@ async function boot() {
     await fetchDocuments();
     showConnectionState(currentConfig.token ? "GitHub 已连接" : "GitHub 只读访问", "connected");
     setSaveState(currentConfig.token ? "已保存" : "只读");
+    updateStats();
+    updateSessionSummary();
+    if (!docButtons.length) {
+      const draft = loadDraft(sharedParams.doc || "draft");
+      if (draft) {
+        docTitle.value = draft.title;
+        editor.innerHTML = draft.content;
+        activeDocument.slug = sharedParams.doc || activeDocument.slug;
+        updateStats();
+        updateSaveTime(draft.updatedAt);
+        updateUrlForDocument(activeDocument.slug);
+        setSaveState("草稿已恢复");
+      }
+    }
   } catch (error) {
     console.error(error);
     showConnectionState("连接异常", "error");
     setSaveState("连接失败");
+    const draft = loadDraft(sharedParams.doc || "draft");
+    if (draft) {
+      docTitle.value = draft.title;
+      editor.innerHTML = draft.content;
+      activeDocument.slug = sharedParams.doc || activeDocument.slug;
+      updateStats();
+      updateSaveTime(draft.updatedAt);
+      updateUrlForDocument(activeDocument.slug);
+      showToast("已从本机草稿恢复未同步内容");
+    }
   }
 }
 
