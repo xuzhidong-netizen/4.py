@@ -136,8 +136,7 @@ button {
 .topbar,
 .tool-group,
 .doc-flags,
-.top-actions,
-.presence-head {
+.top-actions {
   display: flex;
   align-items: center;
 }
@@ -434,46 +433,6 @@ button {
   padding: 14px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.82);
-}
-
-.presence-panel {
-  margin: 14px 0 16px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.presence-head {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.presence-state {
-  color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.presence-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.presence-chip,
-.presence-empty {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(36, 87, 245, 0.1);
-  color: var(--text);
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.presence-empty {
-  background: rgba(15, 23, 42, 0.08);
-  color: var(--muted);
 }
 
 .toast {
