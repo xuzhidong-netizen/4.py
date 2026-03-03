@@ -3,265 +3,189 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZTE iCenter Workspace</title>
+    <title>iEnter Docs</title>
     <meta
       name="description"
-      content="A high-fidelity enterprise workspace page inspired by ZTE iCenter."
+      content="High-fidelity online document editor page with document list, editor canvas, toolbar, and save state."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Noto+Serif+SC:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="page-shell">
+    <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">Z</div>
+          <div class="brand-mark">D</div>
           <div>
-            <p class="brand-eyebrow">企业数字化办公平台</p>
-            <h1>ZTE iCenter</h1>
+            <p class="eyebrow">云端文档空间</p>
+            <h1>iEnter Docs</h1>
           </div>
         </div>
 
-        <nav class="nav">
-          <button class="nav-item active" data-target="workspace">
-            <span>工作台</span>
-            <small>Workspace</small>
-          </button>
-          <button class="nav-item" data-target="approval">
-            <span>审批中心</span>
-            <small>Approval</small>
-          </button>
-          <button class="nav-item" data-target="operation">
-            <span>运营大盘</span>
-            <small>Operations</small>
-          </button>
-          <button class="nav-item" data-target="knowledge">
-            <span>知识协同</span>
-            <small>Knowledge</small>
-          </button>
-          <button class="nav-item" data-target="profile">
-            <span>个人门户</span>
-            <small>Profile</small>
-          </button>
-        </nav>
+        <label class="doc-search">
+          <input id="doc-search" type="search" placeholder="搜索文档标题或标签" />
+        </label>
 
-        <section class="side-card">
-          <p class="card-label">AI 助理</p>
-          <h2>一部手机打天下</h2>
-          <p>
-            聚合审批、协同、数据洞察与客户接待入口，匹配中大型企业统一触点的工作台风格。
-          </p>
-          <button class="ghost-btn" id="launch-assistant">开始问询</button>
+        <div class="sidebar-section">
+          <div class="sidebar-head">
+            <p class="eyebrow">最近文档</p>
+            <button class="text-btn" id="new-doc">新建</button>
+          </div>
+          <div class="doc-list" id="doc-list">
+            <button class="doc-item active" data-title="2026 市场合作方案">
+              <strong>2026 市场合作方案</strong>
+              <small>刚刚编辑 · 你</small>
+            </button>
+            <button class="doc-item" data-title="客户参访接待 SOP">
+              <strong>客户参访接待 SOP</strong>
+              <small>18 分钟前 · 运营组</small>
+            </button>
+            <button class="doc-item" data-title="新品发布节奏总表">
+              <strong>新品发布节奏总表</strong>
+              <small>今天 09:20 · 产品部</small>
+            </button>
+            <button class="doc-item" data-title="区域经营复盘纪要">
+              <strong>区域经营复盘纪要</strong>
+              <small>昨天 · 徐志东</small>
+            </button>
+          </div>
+        </div>
+
+        <section class="storage-card">
+          <p class="eyebrow">同步状态</p>
+          <h2>团队空间已连接</h2>
+          <p>自动保存、版本快照与分享权限在当前页面内模拟展示。</p>
+          <div class="storage-bar">
+            <span style="width: 68%"></span>
+          </div>
+          <small>68% of 200 GB used</small>
         </section>
       </aside>
 
-      <main class="main">
+      <main class="workspace">
         <header class="topbar">
-          <div>
-            <p class="hero-tag">DIGITAL OPERATION CENTER</p>
-            <h2>您好，徐志东</h2>
-            <p class="hero-copy">
-              今日待处理事项 14 项，重点经营指标与客户接待安排已同步到工作台。
-            </p>
+          <div class="doc-meta">
+            <input id="doc-title" class="doc-title" value="2026 市场合作方案" />
+            <div class="doc-flags">
+              <span class="badge">协同编辑</span>
+              <span class="save-state" id="save-state">已保存</span>
+            </div>
           </div>
 
-          <div class="topbar-actions">
-            <label class="search">
-              <input
-                id="search-input"
-                type="search"
-                placeholder="搜索应用、流程、客户接待、制度文档"
-              />
-            </label>
-            <button class="primary-btn">发起流程</button>
+          <div class="top-actions">
+            <button class="ghost-btn" id="share-btn">分享</button>
+            <button class="primary-btn" id="export-btn">导出</button>
           </div>
         </header>
 
-        <section class="hero-grid">
-          <article class="hero-panel pulse">
-            <div class="hero-panel-head">
-              <p class="card-label">经营驾驶舱</p>
-              <span class="status-chip">实时同步</span>
-            </div>
-            <div class="metric-row">
-              <div>
-                <p class="metric-value">98.2%</p>
-                <p class="metric-label">交付准时率</p>
-              </div>
-              <div>
-                <p class="metric-value">126</p>
-                <p class="metric-label">重点项目在线</p>
-              </div>
-              <div>
-                <p class="metric-value">31</p>
-                <p class="metric-label">本周客户接待</p>
-              </div>
-            </div>
-            <div class="trend-bars" aria-label="业绩趋势图">
-              <span style="--bar: 42%"></span>
-              <span style="--bar: 68%"></span>
-              <span style="--bar: 51%"></span>
-              <span style="--bar: 78%"></span>
-              <span style="--bar: 85%"></span>
-              <span style="--bar: 70%"></span>
-              <span style="--bar: 92%"></span>
-            </div>
-          </article>
-
-          <article class="notice-panel">
-            <div class="hero-panel-head">
-              <p class="card-label">消息中心</p>
-              <span class="link-text">查看全部</span>
-            </div>
-            <ul class="notice-list">
-              <li>
-                <strong>客户接待</strong>
-                <span>深圳科技园展厅参观申请待确认</span>
-              </li>
-              <li>
-                <strong>流程审批</strong>
-                <span>差旅报销单已流转至你</span>
-              </li>
-              <li>
-                <strong>经营分析</strong>
-                <span>区域销售周报已自动生成</span>
-              </li>
-            </ul>
-          </article>
+        <section class="toolbar">
+          <div class="tool-group">
+            <button class="tool-btn active" data-command="bold"><strong>B</strong></button>
+            <button class="tool-btn" data-command="italic"><em>I</em></button>
+            <button class="tool-btn" data-command="underline"><span class="u">U</span></button>
+          </div>
+          <div class="tool-group">
+            <select id="font-family">
+              <option value="'Noto Serif SC', serif">思源宋体</option>
+              <option value="system-ui, sans-serif">系统无衬线</option>
+              <option value="Georgia, serif">Georgia</option>
+            </select>
+            <select id="font-size">
+              <option value="16px">16</option>
+              <option value="18px" selected>18</option>
+              <option value="20px">20</option>
+              <option value="24px">24</option>
+            </select>
+          </div>
+          <div class="tool-group">
+            <button class="tool-btn" data-command="justifyLeft">左对齐</button>
+            <button class="tool-btn" data-command="justifyCenter">居中</button>
+            <button class="tool-btn" data-command="insertUnorderedList">列表</button>
+          </div>
         </section>
 
-        <section class="content-grid">
-          <section class="module-card" id="workspace">
-            <div class="section-head">
-              <div>
-                <p class="card-label">高频入口</p>
-                <h3>工作台应用矩阵</h3>
-              </div>
-              <button class="text-btn">自定义编排</button>
+        <div class="editor-layout">
+          <aside class="outline-panel">
+            <div class="panel-head">
+              <p class="eyebrow">文档大纲</p>
             </div>
-            <div class="app-grid" id="app-grid">
-              <button class="app-tile featured" data-keyword="审批">
-                <span class="app-icon">A</span>
-                <strong>审批中心</strong>
-                <small>合同、报销、采购、用印</small>
-              </button>
-              <button class="app-tile" data-keyword="客户">
-                <span class="app-icon">C</span>
-                <strong>客户接待</strong>
-                <small>展厅预约、访客、讲解安排</small>
-              </button>
-              <button class="app-tile" data-keyword="考勤">
-                <span class="app-icon">T</span>
-                <strong>考勤假勤</strong>
-                <small>请假、加班、排班</small>
-              </button>
-              <button class="app-tile" data-keyword="项目">
-                <span class="app-icon">P</span>
-                <strong>项目协同</strong>
-                <small>里程碑、风险、资源池</small>
-              </button>
-              <button class="app-tile" data-keyword="数据">
-                <span class="app-icon">D</span>
-                <strong>数据驾驶舱</strong>
-                <small>经营指标、区域洞察</small>
-              </button>
-              <button class="app-tile" data-keyword="知识">
-                <span class="app-icon">K</span>
-                <strong>知识社区</strong>
-                <small>制度、经验、问答</small>
-              </button>
+            <ul class="outline-list">
+              <li><a href="#section-1">一、年度目标</a></li>
+              <li><a href="#section-2">二、合作模式</a></li>
+              <li><a href="#section-3">三、投放节奏</a></li>
+              <li><a href="#section-4">四、预算安排</a></li>
+            </ul>
+          </aside>
+
+          <section class="editor-stage">
+            <div class="editor-page">
+              <div
+                id="editor"
+                class="editor"
+                contenteditable="true"
+                spellcheck="false"
+              >
+                <h1>2026 市场合作方案</h1>
+                <p>
+                  本文档用于统一年度市场合作策略、客户活动节奏与预算执行标准，保证跨区域团队对外口径一致，并为重点项目复盘保留结构化记录。
+                </p>
+
+                <h2 id="section-1">一、年度目标</h2>
+                <p>
+                  聚焦核心行业客户，围绕展厅参访、行业论坛与联合发布三类活动建立品牌触点，形成“线索获取 - 商机转化 - 复盘沉淀”的闭环。
+                </p>
+                <ul>
+                  <li>提升高价值客户触达效率</li>
+                  <li>建立跨区域统一物料标准</li>
+                  <li>通过在线文档沉淀协同经验</li>
+                </ul>
+
+                <h2 id="section-2">二、合作模式</h2>
+                <p>
+                  针对重点行业客户，采用总部统筹、区域承接、项目组联动的三级协作模式。所有客户接待申请、宣传物料审批和现场复盘统一在文档空间内沉淀。
+                </p>
+
+                <h2 id="section-3">三、投放节奏</h2>
+                <p>
+                  Q1 完成目标客户名单梳理与关键展会排期；Q2 启动区域路演；Q3 深化行业案例输出；Q4 统一复盘并准备次年预算。
+                </p>
+
+                <h2 id="section-4">四、预算安排</h2>
+                <p>
+                  预算遵循“活动价值优先、复用优先、模板化执行”的原则。所有预算项需在审批前补齐活动目标、触达人群及复盘责任人。
+                </p>
+              </div>
             </div>
           </section>
 
-          <section class="stack">
-            <article class="module-card compact" id="approval">
-              <div class="section-head">
-                <div>
-                  <p class="card-label">待办清单</p>
-                  <h3>流程审批</h3>
-                </div>
-                <span class="status-chip warn">6 项紧急</span>
-              </div>
-              <ul class="todo-list">
-                <li><span>供应商准入审批</span><strong>10:30</strong></li>
-                <li><span>海外出差申请</span><strong>11:15</strong></li>
-                <li><span>客户接待预算确认</span><strong>13:40</strong></li>
-                <li><span>展厅资源协调单</span><strong>15:20</strong></li>
-              </ul>
-            </article>
-
-            <article class="module-card compact" id="operation">
-              <div class="section-head">
-                <div>
-                  <p class="card-label">运营节奏</p>
-                  <h3>关键指标</h3>
-                </div>
-              </div>
-              <div class="kpi-list">
-                <div>
-                  <span>在线用户</span>
-                  <strong>102,478</strong>
-                </div>
-                <div>
-                  <span>远程办公效率</span>
-                  <strong>98%</strong>
-                </div>
-                <div>
-                  <span>合作伙伴协同</span>
-                  <strong>37,000+</strong>
-                </div>
-              </div>
-            </article>
-          </section>
-
-          <section class="module-card" id="knowledge">
-            <div class="section-head">
-              <div>
-                <p class="card-label">协同中枢</p>
-                <h3>知识与公告</h3>
-              </div>
-              <button class="text-btn">发布动态</button>
+          <aside class="activity-panel">
+            <div class="panel-head">
+              <p class="eyebrow">协作动态</p>
             </div>
-            <div class="knowledge-feed">
+            <div class="activity-list">
               <article>
-                <p class="feed-type">制度更新</p>
-                <h4>客户参观申请流程已升级为线上审批闭环</h4>
-                <p>新增知会人、展厅能力匹配与英文宣讲字段，降低跨团队沟通成本。</p>
-              </article>
-              <article>
-                <p class="feed-type">AI 摘要</p>
-                <h4>区域经营周报自动归纳 12 个风险点</h4>
-                <p>支持一键跳转到异常订单、交付延迟与库存波动详情。</p>
-              </article>
-            </div>
-          </section>
-
-          <section class="module-card profile-card" id="profile">
-            <div class="section-head">
-              <div>
-                <p class="card-label">个人门户</p>
-                <h3>今日安排</h3>
-              </div>
-            </div>
-            <div class="profile-panel">
-              <div class="avatar">徐</div>
-              <div>
                 <strong>徐志东</strong>
-                <p>国内营销 / 数字化运营</p>
-              </div>
+                <p>更新了年度目标与预算说明</p>
+                <small>刚刚</small>
+              </article>
+              <article>
+                <strong>市场运营组</strong>
+                <p>补充了客户参访流程链接</p>
+                <small>12 分钟前</small>
+              </article>
+              <article>
+                <strong>系统</strong>
+                <p>已生成自动保存快照 v1.8</p>
+                <small>29 分钟前</small>
+              </article>
             </div>
-            <ul class="schedule-list">
-              <li>09:30 周例会</li>
-              <li>14:00 展厅接待协调</li>
-              <li>16:30 AI 经营分析复盘</li>
-            </ul>
-          </section>
-        </section>
+          </aside>
+        </div>
       </main>
     </div>
 

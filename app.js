@@ -1,16 +1,15 @@
-const navItems = document.querySelectorAll(".nav-item");
-const sections = {
-  workspace: document.querySelector("#workspace"),
-  approval: document.querySelector("#approval"),
-  operation: document.querySelector("#operation"),
-  knowledge: document.querySelector("#knowledge"),
-  profile: document.querySelector("#profile"),
-};
-
+const editor = document.querySelector("#editor");
+const saveState = document.querySelector("#save-state");
+const docTitle = document.querySelector("#doc-title");
+const docItems = document.querySelectorAll(".doc-item");
+const docSearch = document.querySelector("#doc-search");
 const toast = document.querySelector("#toast");
-const searchInput = document.querySelector("#search-input");
-const appTiles = document.querySelectorAll(".app-tile");
-const launchAssistant = document.querySelector("#launch-assistant");
+const shareButton = document.querySelector("#share-btn");
+const exportButton = document.querySelector("#export-btn");
+const newDocButton = document.querySelector("#new-doc");
+const toolButtons = document.querySelectorAll(".tool-btn");
+const fontFamily = document.querySelector("#font-family");
+const fontSize = document.querySelector("#font-size");
 
 function showToast(message) {
   toast.textContent = message;
@@ -21,35 +20,77 @@ function showToast(message) {
   }, 2200);
 }
 
-navItems.forEach((item) => {
+function markSaving() {
+  saveState.textContent = "保存中...";
+  saveState.classList.add("saving");
+  window.clearTimeout(markSaving.timer);
+  markSaving.timer = window.setTimeout(() => {
+    saveState.textContent = "已保存";
+    saveState.classList.remove("saving");
+  }, 900);
+}
+
+editor.addEventListener("input", markSaving);
+docTitle.addEventListener("input", markSaving);
+
+docItems.forEach((item) => {
   item.addEventListener("click", () => {
-    navItems.forEach((nav) => nav.classList.remove("active"));
+    docItems.forEach((doc) => doc.classList.remove("active"));
     item.classList.add("active");
-
-    const target = item.dataset.target;
-    sections[target]?.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast(`已切换到${item.querySelector("span").textContent}`);
+    docTitle.value = item.dataset.title;
+    markSaving();
+    showToast(`已切换到《${item.dataset.title}》`);
   });
 });
 
-searchInput.addEventListener("input", (event) => {
-  const value = event.target.value.trim();
-  const keyword = value.toLowerCase();
+docSearch.addEventListener("input", (event) => {
+  const keyword = event.target.value.trim().toLowerCase();
 
-  appTiles.forEach((tile) => {
-    const text = tile.textContent.toLowerCase();
-    const matched = keyword && text.includes(keyword);
-    tile.classList.toggle("match", matched);
-    tile.style.opacity = !keyword || matched ? "1" : "0.38";
+  docItems.forEach((item) => {
+    const matched = !keyword || item.textContent.toLowerCase().includes(keyword);
+    item.classList.toggle("match", keyword && matched);
+    item.style.display = matched ? "flex" : "none";
   });
 });
 
-appTiles.forEach((tile) => {
-  tile.addEventListener("click", () => {
-    showToast(`${tile.querySelector("strong").textContent} 模块已打开`);
+toolButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const command = button.dataset.command;
+    document.execCommand(command, false);
+
+    if (["bold", "italic", "underline"].includes(command)) {
+      button.classList.toggle("active");
+    }
+
+    editor.focus();
+    markSaving();
   });
 });
 
-launchAssistant.addEventListener("click", () => {
-  showToast("AI 助理已就绪，可用于审批、知识检索与经营分析。");
+fontFamily.addEventListener("change", (event) => {
+  document.execCommand("fontName", false, event.target.value);
+  editor.focus();
+  markSaving();
+});
+
+fontSize.addEventListener("change", (event) => {
+  editor.style.fontSize = event.target.value;
+  markSaving();
+});
+
+shareButton.addEventListener("click", () => {
+  showToast("分享链接已复制到剪贴板的模拟流程已触发");
+});
+
+exportButton.addEventListener("click", () => {
+  showToast("已触发导出为 Word/PDF 的模拟流程");
+});
+
+newDocButton.addEventListener("click", () => {
+  docTitle.value = "未命名文档";
+  editor.innerHTML =
+    "<h1>未命名文档</h1><p>在这里开始记录新的文档内容。工具栏、自动保存与协作动态会随编辑同步更新。</p>";
+  docItems.forEach((doc) => doc.classList.remove("active"));
+  markSaving();
+  showToast("已创建新的空白文档");
 });
