@@ -74,10 +74,12 @@
             <div class="doc-flags">
               <span class="badge">协同编辑</span>
               <span class="save-state" id="save-state">已保存</span>
+              <span class="connection-state" id="connection-state">未连接 Supabase</span>
             </div>
           </div>
 
           <div class="top-actions">
+            <button class="ghost-btn" id="connect-btn">连接数据库</button>
             <button class="ghost-btn" id="share-btn">分享</button>
             <button class="primary-btn" id="export-btn">导出</button>
           </div>
@@ -188,6 +190,34 @@
         </div>
       </main>
     </div>
+
+    <dialog class="config-dialog" id="config-dialog">
+      <form class="config-form" id="config-form" method="dialog">
+        <div>
+          <p class="eyebrow">Supabase 连接</p>
+          <h2>配置真实保存</h2>
+          <p class="config-copy">
+            填入你的 Project URL 和 anon key 后，页面会把文档真实保存到 Supabase 的
+            `documents` 表。
+          </p>
+        </div>
+
+        <label>
+          <span>Project URL</span>
+          <input id="supabase-url" name="supabase-url" type="url" placeholder="https://xxxx.supabase.co" required />
+        </label>
+
+        <label>
+          <span>Anon Key</span>
+          <textarea id="supabase-key" name="supabase-key" rows="4" placeholder="sb_publishable_xxx 或 anon key" required></textarea>
+        </label>
+
+        <div class="dialog-actions">
+          <button type="button" class="ghost-btn" id="close-config">取消</button>
+          <button type="submit" class="primary-btn">保存并连接</button>
+        </div>
+      </form>
+    </dialog>
 
     <div class="toast" id="toast" aria-live="polite"></div>
     <script src="./app.js"></script>
