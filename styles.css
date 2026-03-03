@@ -399,6 +399,11 @@ button {
   color: var(--accent);
 }
 
+.outline-list a.active {
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(36, 87, 245, 0.2);
+}
+
 .editor-stage {
   min-width: 0;
 }

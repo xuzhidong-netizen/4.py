@@ -25,6 +25,7 @@ const docStats = document.querySelector("#doc-stats");
 const saveTime = document.querySelector("#save-time");
 const sessionSummary = document.querySelector("#session-summary");
 const docEmpty = document.querySelector("#doc-empty");
+const outlineList = document.querySelector("#outline-list");
 const historyList = document.querySelector("#history-list");
 const historyEmpty = document.querySelector("#history-empty");
 const toolButtons = document.querySelectorAll(".tool-btn");
@@ -328,6 +329,51 @@ function getPlainPreview(html) {
   return (temp.textContent || "").trim().slice(0, 72) || "空白内容";
 }
 
+function ensureHeadingId(heading, index) {
+  if (!heading.id) {
+    heading.id = `section-${index + 1}`;
+  }
+  return heading.id;
+}
+
+function buildOutline() {
+  outlineList.innerHTML = "";
+  const headings = [...editor.querySelectorAll("h2")];
+
+  if (!headings.length) {
+    const item = document.createElement("li");
+    item.innerHTML = '<a href="#top">当前没有二级标题</a>';
+    outlineList.appendChild(item);
+    return;
+  }
+
+  headings.forEach((heading, index) => {
+    const id = ensureHeadingId(heading, index);
+    const item = document.createElement("li");
+    item.innerHTML = `<a href="#${id}" data-outline-id="${id}">${heading.textContent.trim()}</a>`;
+    outlineList.appendChild(item);
+  });
+}
+
+function updateActiveOutline() {
+  const headings = [...editor.querySelectorAll("h2[id]")];
+  if (!headings.length) {
+    return;
+  }
+
+  let activeId = headings[0].id;
+  headings.forEach((heading) => {
+    const rect = heading.getBoundingClientRect();
+    if (rect.top <= window.innerHeight * 0.28) {
+      activeId = heading.id;
+    }
+  });
+
+  outlineList.querySelectorAll("a").forEach((link) => {
+    link.classList.toggle("active", link.dataset.outlineId === activeId);
+  });
+}
+
 function renderHistory() {
   historyList.innerHTML = "";
 
@@ -430,6 +476,8 @@ function setEditorContent(record) {
   updateStats();
   updateSaveTime(effectiveRecord.updatedAt);
   updateUrlForDocument(effectiveRecord.slug);
+  buildOutline();
+  updateActiveOutline();
   renderHistory();
   dirty = false;
 }
@@ -723,6 +771,8 @@ async function handleDocumentSelection(button) {
 
 editor.addEventListener("input", () => {
   updateStats();
+  buildOutline();
+  updateActiveOutline();
   scheduleSave();
 });
 
@@ -769,6 +819,24 @@ historyList.addEventListener("click", async (event) => {
     await restoreHistoryItem(id);
   }
 });
+
+outlineList.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-outline-id]");
+  if (!link) {
+    return;
+  }
+
+  event.preventDefault();
+  const target = editor.querySelector(`#${CSS.escape(link.dataset.outlineId)}`);
+  if (!target) {
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  updateActiveOutline();
+});
+
+window.addEventListener("scroll", updateActiveOutline, { passive: true });
 
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -928,6 +996,8 @@ async function boot() {
     setSaveState(currentConfig.token ? "已保存" : "只读");
     updateStats();
     updateSessionSummary();
+    buildOutline();
+    updateActiveOutline();
     if (!docButtons.length) {
       const draft = loadDraft(sharedParams.doc || "draft");
       if (draft) {
